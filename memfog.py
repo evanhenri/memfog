@@ -18,23 +18,44 @@ import string
 import os
 
 def valid_input(s):
+    """
+    :type s: str
+    :rtype: bool
+    """
     return len(s) > 0 and s.isdigit() and int(s) >= 0
 
 def default_input(prompt, prefill=''):
-   readline.set_startup_hook(lambda: readline.insert_text(prefill))
-   try:
-      return input(prompt)
-   finally:
-      readline.set_startup_hook()
+    """
+    :type prompt: str
+    :type prefill: str
+    :returns: str from input prompt entry populated by default with editable text from prefill
+    """
+    readline.set_startup_hook(lambda: readline.insert_text(prefill))
+    try:
+        return input(prompt)
+    finally:
+        readline.set_startup_hook()
 
 def strip_whitespace(s):
+    """
+    :type s: str
+    :returns: s stripped or whitespace
+    """
     return ''.join([c for c in s if c not in string.whitespace])
 
 def strip_punctuation(s):
+    """
+    :type s: str
+    :returns: s stripped of all punctuation no found in exclusions
+    """
     exclusions = ['\'','"']
     return ''.join([c for c in s if c not in string.punctuation or c in exclusions])
 
 def standardize(s):
+    """
+    :type s: str
+    :returns: list of non-empty words strings from s stripped of whitespace and punctuation
+    """
     stripped = strip_punctuation(s).lower()
     arr = stripped.split(' ')
     arr_no_ws = map(strip_whitespace, arr)
@@ -84,8 +105,8 @@ class Brain:
 
     def _get_memory_key(self):
         """
-        :returns smallest key from self.memory_keys
-        :rtype int
+        :rtype: int
+        :returns: smallest key from self.memory_keys
         """
         # use minimum of available memory keys so keys are consecutive
         next_key = min(self.memory_keys)
@@ -97,8 +118,7 @@ class Brain:
     def _memory_match(self, user_keywords):
         """
         :type user_keywords: str
-        :returns self.memories sorted by memory_obj.search_score in ascending order
-        :rtype dict
+        :returns: self.memories dict sorted by memory_obj.search_score in ascending order
         """
         user_set = set(standardize(user_keywords))
         user_set_count = len(user_set)
@@ -148,8 +168,7 @@ class Brain:
         """
         :type m_matches: dict
         :type action_description: str
-        :returns m_id of selected memory or 0
-        :rtype int
+        :returns: m_id int of selected memory or 0
         """
         if len(self.memories) > 0:
             print('{} which memory?'.format(action_description))
@@ -205,6 +224,9 @@ class Memory:
         return set(standardize(m_data))
 
 def read_pkl(pkl_file):
+    """
+    :type pkl_file: str
+    """
     try:
         with open(pkl_file, 'rb') as in_stream:
             if os.path.getsize(pkl_file) > 0:
@@ -216,6 +238,10 @@ def read_pkl(pkl_file):
     return
 
 def write_pkl(pkl_file, payload):
+    """
+    :type pkl_file: str
+    :type payload: Brain
+    """
     try:
         with open(pkl_file, 'wb') as out_stream:
             pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
@@ -224,8 +250,6 @@ def write_pkl(pkl_file, payload):
         print('Error occured while saving {}\n{}'.format(pkl_file, e.args))
 
 def main(argv):
-    # print(argv)
-
     brain_file = 'brain.pkl'
     brain = read_pkl(brain_file)
 
@@ -233,11 +257,11 @@ def main(argv):
         brain = Brain()
         brain.altered = True
 
-    # delimit words with whitespace so they can be processed at same time as stored strings
+    # delimit words with whitespace so they can be processed at same time as memory string data
     user_keywords = ' '.join(argv['<keyword>'])
 
     if argv['--add']:
-        # assumed that any keywords entered would be the memory title if user intent is to add a new memory
+        # assumed that keywords entered are the memory title for the new memory being added
         brain.create_memory(user_keywords)
     elif argv['--remove']:
         brain.remove_memory(user_keywords)
