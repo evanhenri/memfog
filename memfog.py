@@ -1,6 +1,6 @@
 """memfog
 Usage:
-  run.py [<keyword>...[--add | --rm | --edit]]
+  run.py <keyword>...[--add | --rm | --edit]
 
 Options:
   -h --help     Show this screen
@@ -41,8 +41,8 @@ def standardize(s):
 class Brain:
     def __init__(self):
         self.memory_ids = {0}
-        self.brain_file = 'brain.pkl'
         self.memories = {}
+        self.altered = False
 
     def create_memory(self):
         M = Memory()
@@ -53,12 +53,15 @@ class Brain:
         M.update_body()
 
         self.memories.setdefault(self._get_memory_id(), M)
+        self.altered = True
+
 
     def edit_memory(self, user_keywords):
         memory_matches = self._memory_match(user_keywords)
         m_id = self._select_memory_from_list(memory_matches)
         self.memories[m_id].edit_menu()
         print('Successfully edited \'{}\''.format(self.memories[m_id].title))
+        self.altered = True
 
     def _get_memory_id(self):
         next_id = min(self.memory_ids)
@@ -96,6 +99,7 @@ class Brain:
         memory_matches = self._memory_match(user_keywords)
         m_id = self._select_memory_from_list(memory_matches)
         del self.memories[m_id]
+        self.altered = True
 
     def _select_memory_from_list(self, memory_matches):
         [print('{}){}'.format(i, m.title)) for i,m in memory_matches]
@@ -147,24 +151,34 @@ class Memory:
         memory_data = ' '.join([self.title, self.keywords, self.body])
         return set(standardize(memory_data))
 
+def read_pkl(pkl_file):
+    try:
+        with open(pkl_file, 'rb') as in_stream:
+            if os.path.getsize(pkl_file) > 0:
+                return pickle.load(in_stream)
+    except FileNotFoundError:
+        print('{0} not found, creating new {0} file'.format(pkl_file))
+    except Exception as e:
+        print('Error occured while loading {}\n{}'.format(pkl_file, e.args))
+    return None
+
+def write_pkl(pkl_file, payload):
+    try:
+        with open(pkl_file, 'wb') as out_stream:
+            pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
+            print('Successfully saved {}'.format(pkl_file))
+    except Exception as e:
+        print('Error occured while saving {}\n{}'.format(pkl_file, e.args))
+
 def main(argv):
     # print(argv)
 
     brain_file = 'brain.pkl'
-    brain = None
+    brain = read_pkl(brain_file)
 
-    ########################################### load
-    try:
-        with open(brain_file, 'rb') as in_stream:
-            if os.path.getsize(brain_file) > 0:
-                brain = pickle.load(in_stream)
-    except FileNotFoundError:
-        print('{} not found, creating new {} file'.format(brain_file, brain_file.split('.')[0]))
+    if not brain:
         brain = Brain()
-    except Exception:
-        print('Error occured while loading {}'.format(brain_file))
-        exit()
-
+        brain.altered = True
 
     # delimit words with whitespace so they can be processed at same time as stored strings
     user_keywords = ' '.join(argv['<keyword>'])
@@ -183,15 +197,9 @@ def main(argv):
     else:
         print('No keywords supplied')
 
-
-    ########################################### save
-    try:
-        with open(brain_file, 'wb') as out_stream:
-            pickle.dump(brain, out_stream, pickle.HIGHEST_PROTOCOL)
-        print('Memory saved')
-    except Exception:
-        print('Error occured while saving {}'.format(brain_file))
-        exit()
+    if brain.altered:
+        brain.altered = False
+        write_pkl(brain_file, brain)
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='memfog v1.0.0')
