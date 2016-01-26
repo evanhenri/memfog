@@ -1,6 +1,8 @@
 """memfog
 Usage:
-  memfog.py [<keyword>...] [--add | --remove | --edit]
+  memfog.py [<keyword>...]
+            [--add | --remove | --edit]
+            [(<keyword>... --add | --remove | --edit)]
 
 Options:
   -h --help     Show this screen
@@ -67,17 +69,15 @@ class Brain:
         self.altered = True
 
     def _get_memory_key(self):
-        print(self.memory_keys)
+        # use minimum of available memory keys so keys are consecutive
         next_key = min(self.memory_keys)
         self.memory_keys.remove(next_key)
-
         if len(self.memory_keys) == 0:
             self.memory_keys.add(next_key + 1)
-
-        print(next_key, self.memory_keys)
         return next_key
 
     def _memory_match(self, user_keywords):
+        print(user_keywords)
         """returns a list of (memory_key, memory_obj) tuples sorted in ascending order by relevancy to user_keywords"""
         user_keywords = set(standardize(user_keywords))
 
@@ -102,6 +102,9 @@ class Brain:
     def remove_memory(self, user_keywords):
         m_matches = self._memory_match(user_keywords)
         m_key = self._select_memory_from_list(m_matches)
+
+        # reclaim key of deleted memory so it can be reused
+        self.memory_keys.add(m_key)
         del self.memories[m_key]
         self.altered = True
 
@@ -149,8 +152,8 @@ class Memory:
                     3:self.update_body,
                 }
 
-                if selection == 4:
-                    if len(input('Press ENTER to Confirm')) == 0:
+                if selection not in options:
+                    if len(input('Press ENTER to exit')) == 0:
                         return
                 else:
                     options[selection]()
