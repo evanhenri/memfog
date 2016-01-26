@@ -12,7 +12,11 @@ Options:
 from docopt import docopt
 import readline
 import pickle
+import string
 import os
+
+def valid_input(s):
+    return len(s) > 0 and s.isdigit() and int(s) >= 0
 
 def default_input(prompt, prefill=''):
    readline.set_startup_hook(lambda: readline.insert_text(prefill))
@@ -21,195 +25,173 @@ def default_input(prompt, prefill=''):
    finally:
       readline.set_startup_hook()
 
-def non_empty_str(s):
-    return len(s) > 0
+def strip_whitespace(s):
+    return ''.join([c for c in s if c not in string.whitespace])
 
-class Node:
-    def __init__(self, title, phrases, keywords, body):
-        self.title = title
-        self.phrases = list(phrases)
-        self.keywords = list(keywords)
-        self.body = body
+def strip_punctuation(s):
+    exclusions = ['\'','"']
+    return ''.join([c for c in s if c not in string.punctuation or c in exclusions])
+
+def standardize(s):
+    stripped = strip_punctuation(s).lower()
+    arr = stripped.split(' ')
+    arr_no_ws = map(strip_whitespace, arr)
+    return [w for w in arr_no_ws if len(w) > 0]
+
+class Brain:
+    def __init__(self):
+        self.memory_ids = {0}
+        self.brain_file = 'brain.pkl'
+        self.memories = {}
+
+    def create_memory(self):
+        M = Memory()
+
+        # require input for all memory variables
+        M.update_title()
+        M.update_keywords()
+        M.update_body()
+
+        self.memories.setdefault(self._get_memory_id(), M)
+
+    def edit_memory(self, user_keywords):
+        memory_matches = self._memory_match(user_keywords)
+        m_id = self._select_memory_from_list(memory_matches)
+        self.memories[m_id].edit_menu()
+        print('Successfully edited \'{}\''.format(self.memories[m_id].title))
+
+    def _get_memory_id(self):
+        next_id = min(self.memory_ids)
+        self.memory_ids.remove(next_id)
+
+        #
+        if len(self.memory_ids) == 0:
+            self.memory_ids.add(next_id+1)
+
+        print(next_id, self.memory_ids)
+        return next_id
+
+    def _memory_match(self, user_keywords):
+
+        user_keywords = set(standardize(user_keywords))
+
+        for memory in self.memories.values():
+            memory_keywords = memory.make_set()
+            memory.search_score = len(user_keywords.intersection(memory_keywords))
+
+        # memories are sorted by search score
+        matches = sorted(self.memories.items(), key=lambda x: x[1])
+
+        # reset search score for all memories
+        for m in self.memories.values():
+            m.search_score=0
+
+        return matches
+
+    def recall_memory(self, user_keywords):
+        memory_matches = self._memory_match(user_keywords)
+        [print('{}\n\t{}'.format(m[1].title, m[1].body)) for m in memory_matches]
+
+    def remove_memory(self, user_keywords):
+        memory_matches = self._memory_match(user_keywords)
+        m_id = self._select_memory_from_list(memory_matches)
+        del self.memories[m_id]
+
+    def _select_memory_from_list(self, memory_matches):
+        [print('{}){}'.format(i, m.title)) for i,m in memory_matches]
+        selection = input('> ')
+        if valid_input(selection):
+            selection = int(selection)
+            if selection in self.memories:
+                return selection
+            else:
+                print('Invalid memory id \'{}\''.format(selection))
+        else:
+            print('Invalid entry \'{}\''.format(selection))
 
 class Memory:
     def __init__(self):
         self.title = ''
-        self.phrases = ''
         self.keywords = ''
         self.body = ''
-        self.memory_file = 'memories.pkl'
+        self.search_score = 0
+    def __gt__(self, other_memory):
+        return self.search_score > other_memory.search_score
 
-    def _construct_memory(self):
-        self.phrases = self.phrases.split(',')
-        self.phrases = [p.lstrip().rstrip() for p in self.phrases]
-        self.phrases = filter(non_empty_str, self.phrases)
-
-        self.keywords = self.keywords.split(',')
-        self.keywords = [k.lstrip().rstrip() for k in self.keywords]
-        self.keywords = filter(non_empty_str, self.keywords)
-
-        return Node(self.title, self.phrases, self.keywords, self.body)
-
-    def _update_memory(self):
-        self.phrases = [p.lstrip().rstrip() for p in self.phrases]
-        self.phrases = filter(non_empty_str, self.phrases)
-
-        self.keywords = [k.lstrip().rstrip() for k in self.keywords]
-        self.keywords = filter(non_empty_str, self.keywords)
-
-        return Node(self.title, self.phrases, self.keywords, self.body)
-
-    def _edit_menu(self, update_mode=False):
-        print('0) Edit Title\n1) Edit Phrases\n2) Edit Keywords\n'
-              '3) Edit Body\n4) Save\n5) Cancel')
-
-        opts = {0:self.update_title, 1:self.update_phrases,
-                2:self.update_keywords, 3:self.update_body}
-
-        selection = input('> ')
-
-        while True:
-            if len(selection) > 0 and selection.isdigit():
-                selection = int(selection)
-                if 0 <= selection < len(opts):
-                    opts[selection]()
-                elif selection == 4:
-                    if update_mode: self._update_memory()
-                    else: self._construct_memory()
-                    break
-                elif input('Confirm cancel y/n: ') == 'y':
-                    break
-            else:
-                print('Invalid entry')
-
-    def create(self):
-        self.update_title()
-        self.update_phrases()
-        self.update_keywords()
-        self.update_body()
-        self._edit_menu()
-
-    def edit(self, *args):
-        memories = self._sort_by_matches(*args)
-        if not memories:
-            print('No memories exist')
-            return
-
-        for i,item in enumerate(memories):
-            print('{}) {}'.format(i, item.title))
-
-        selection = input('> ')
-
-        if len(selection) > 0 and selection.isdigit():
-            selection = int(selection)
-            self.title = memories[selection].title
-            self.phrases = memories[selection].phrases
-            self.keywords = memories[selection].keywords
-            self.body = memories[selection].body
-
-            print(self.title, self.phrases, self.keywords, self.body)
-
-            self._edit_menu(update_mode=True)
-
-    def _load(self):
-        try:
-            with open(self.memory_file, 'rb') as in_stream:
-                if os.path.getsize(self.memory_file) > 0:
-                    return pickle.load(in_stream)
-                return
-        except FileNotFoundError:
-            return
-
-    def recall(self, *args):
-        memories = self._sort_by_matches(*args)
-        if not memories:
-            print('No memories exist')
-            return
-
-        for i,item in enumerate(memories):
-            print('{}) {}'.format(i, item.title))
-
-        selection = input('> ')
-        if len(selection) > 0 and selection.isdigit():
-            selection = int(selection)
-            memory = memories[selection]
-            print('{}\n\n{}'.format(memory.title, memory.body))
-        else:
-            print('Invalid entry')
-
-    def remove(self, *args):
-        memories = self._sort_by_matches(*args)
-        if not memories:
-            print('No memories exist')
-            return
-
-        for i,item in enumerate(memories):
-            print('{}) {}'.format(i, item.title))
-
-        selection = input('> ')
-
-        if len(selection) > 0 and selection.isdigit():
-            selection = int(selection)
-            print('Removed \'{}\''.format(memories[selection].title))
-            if 0 < selection < len(memories):
-                memories.pop(selection)
-
-        self.save_updated_memories(memories)
-
-    def _sort_by_matches(self, *args):
-        memories = self._load()
-        if not memories:
-            return
-
-        matches = []
-        for memory in memories:
-            score = 0
-            for item in args:
-                if any([item in memory.title, item in memory.phrases, item in memory.keywords, item in memory.body]):
-                    score += 1
-            matches.append(score)
-
-        # zip object with their respective count of matching words
-        lst_tuples = zip(matches, memories)
-
-        # sort the tuples by memories with most matching words
-        sorted_tuple = sorted(lst_tuples, key=lambda x: x[0], reverse=True)
-
-        # unzip the tuple and only return the now sorted list of memories
-        return list(list(zip(*sorted_tuple))[1])
-
-    def save_new_memory(self, new_memory):
-        memories = self._load()
-        if memories: memories.append(new_memory)
-        else: memories = [new_memory]
-        self.save_updated_memories(memories)
-
-    def save_updated_memories(self, memories):
-        with open(self.memory_file, 'wb') as out_stream:
-            pickle.dump(memories, out_stream, pickle.HIGHEST_PROTOCOL)
-
-    def update_body(self):
-        self.body = default_input('Body: ', self.body)
-    def update_keywords(self):
-        self.keywords = default_input('Keywords: ', self.keywords)
-    def update_phrases(self):
-        self.phrases = default_input('Phrases: ', self.phrases)
     def update_title(self):
         self.title = default_input('Title: ', self.title)
+    def update_keywords(self):
+        self.keywords = default_input('Keywords: ', self.keywords)
+    def update_body(self):
+        self.body = default_input('Body: ', self.body)
+    def edit_menu(self):
+        while True:
+            print('0) Edit Title\n1) Edit Keywords\n2) Edit Body\n3) Done')
+            selection = input('> ')
+
+            if valid_input(selection):
+                selection = int(selection)
+                options = {
+                    0:self.update_title,
+                    1:self.update_keywords,
+                    2:self.update_body,
+                }
+
+                if selection == 3:
+                    if len(input('Press ENTER to Confirm')) == 0:
+                        return
+                else:
+                    options[selection]()
+
+    def make_set(self):
+        memory_data = ' '.join([self.title, self.keywords, self.body])
+        return set(standardize(memory_data))
 
 def main(argv):
-    print(argv)
+    # print(argv)
 
-    memory = Memory()
+    brain_file = 'brain.pkl'
+    brain = None
+
+    ########################################### load
+    try:
+        with open(brain_file, 'rb') as in_stream:
+            if os.path.getsize(brain_file) > 0:
+                brain = pickle.load(in_stream)
+    except FileNotFoundError:
+        print('{} not found, creating new {} file'.format(brain_file, brain_file.split('.')[0]))
+        brain = Brain()
+    except Exception:
+        print('Error occured while loading {}'.format(brain_file))
+        exit()
+
+
+    # delimit words with whitespace so they can be processed at same time as stored strings
+    user_keywords = ' '.join(argv['<keyword>'])
 
     if argv['--add']:
-        memory.create()
+        brain.create_memory()
     elif argv['--rm']:
-        memory.remove(*argv['<keyword>'])
+        brain.remove_memory(user_keywords)
     elif argv['--edit']:
-        memory.edit(*argv['<keyword>'])
+        brain.edit_memory(user_keywords)
+    elif len(user_keywords) > 0:
+        if len(brain.memories) > 0:
+            brain.recall_memory(user_keywords)
+        else:
+            print('No memories exist')
     else:
-        memory.recall(*argv['<keyword>'])
+        print('No keywords supplied')
+
+
+    ########################################### save
+    try:
+        with open(brain_file, 'wb') as out_stream:
+            pickle.dump(brain, out_stream, pickle.HIGHEST_PROTOCOL)
+        print('Memory saved')
+    except Exception:
+        print('Error occured while saving {}'.format(brain_file))
+        exit()
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='memfog v1.0.0')
@@ -218,8 +200,5 @@ if __name__ == '__main__':
 """
 todo
 
-if try to edit, old values do not appear for some sections like phrases and keywords, issue with lists?
-
-error occurs for line 72, TypeError: object of type 'int' has no len() - not sure why
 
 """
