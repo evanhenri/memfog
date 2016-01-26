@@ -42,17 +42,22 @@ def standardize(s):
 
 class Brain:
     def __init__(self):
-        self.memory_keys = {0}
+        self.memory_keys = {1}
         self.memories = {}
         self.altered = False
 
     def create_memory(self, user_title=None):
+        """
+        :type user_title: str or None
+        """
         m = Memory()
 
-        # if user provided a title in program args, set memory title using their entry
-        if user_title: m.title = user_title
+        # if user provided a title in cli args, set memory title using that entry
+        if user_title:
+            m.title = user_title
         # otherwise prompt them for a title entry
-        else: m.update_title()
+        else:
+            m.update_title()
 
         m.update_keywords()
         m.update_body()
@@ -60,15 +65,28 @@ class Brain:
         self.memories.setdefault(self._get_memory_key(), m)
         self.altered = True
 
+        print('Successfully added \'{}\''.format(m.title))
 
     def edit_memory(self, user_keywords):
+        """
+        :type user_keywords: str
+        """
         m_matches = self._memory_match(user_keywords)
-        m_key = self._select_memory_from_list(m_matches)
-        self.memories[m_key].edit_menu()
-        print('Successfully edited \'{}\''.format(self.memories[m_key].title))
-        self.altered = True
+        while True:
+            m_key = self._select_memory_from_list(m_matches, 'Edit')
+            if m_key:
+                self.memories[m_key].edit_menu()
+                self.altered = True
+
+                print('Successfully edited \'{}\''.format(self.memories[m_key].title))
+            else:
+                break
 
     def _get_memory_key(self):
+        """
+        :returns smallest key from self.memory_keys
+        :rtype int
+        """
         # use minimum of available memory keys so keys are consecutive
         next_key = min(self.memory_keys)
         self.memory_keys.remove(next_key)
@@ -77,52 +95,75 @@ class Brain:
         return next_key
 
     def _memory_match(self, user_keywords):
-        print(user_keywords)
-        """returns a list of (memory_key, memory_obj) tuples sorted in ascending order by relevancy to user_keywords"""
-        user_keywords = set(standardize(user_keywords))
+        """
+        :type user_keywords: str
+        :returns self.memories sorted by memory_obj.search_score in ascending order
+        :rtype dict
+        """
+        user_set = set(standardize(user_keywords))
+        user_set_count = len(user_set)
 
         for m in self.memories.values():
             m_keywords = m.make_set()
-            m.search_score = len(user_keywords.intersection(m_keywords))
+            m_score = len(user_set.intersection(m_keywords))
+            if user_set_count > 0:
+                m.search_score = m_score / user_set_count * 100
 
-        # m_matches is a list of (m_key, m_obj) tuples sorted in ascendaing order by m_obj.search_score
-        m_matches = sorted(self.memories.items(), key=lambda x: x[1])
+        return dict(sorted(self.memories.items(), key=lambda x: x[1]))
 
-        # reset search score for all memories so they are scored correctly next time
-        for m in self.memories.values():
-            m.search_score = 0
-
-        return m_matches
-
-    def recall_memory(self, user_keywords):
+    def display_memory(self, user_keywords):
+        """
+        :type user_keywords: str
+        """
         m_matches = self._memory_match(user_keywords)
-        m_key = self._select_memory_from_list(m_matches)
-        print('{}\n\t{}'.format(self.memories[m_key].title, self.memories[m_key].body))
+        while True:
+            m_key = self._select_memory_from_list(m_matches, 'Display')
+            if m_key:
+                print('{}\n\t{}'.format(self.memories[m_key].title, self.memories[m_key].body))
+            else:
+                break
 
     def remove_memory(self, user_keywords):
+        """
+        :type user_keywords: str
+        """
         m_matches = self._memory_match(user_keywords)
-        m_key = self._select_memory_from_list(m_matches)
-
-        # reclaim key of deleted memory so it can be reused
-        self.memory_keys.add(m_key)
-        del self.memories[m_key]
-        self.altered = True
-
-    def _select_memory_from_list(self, m_matches):
-        [print('{}) {}'.format(i, m.title)) for i,m in m_matches]
-        print('x) Exit')
         while True:
+            m_key = self._select_memory_from_list(m_matches, 'Remove')
+            if m_key:
+                # reclaim key of deleted memory so it can be reused
+                self.memory_keys.add(m_key)
+
+                title = self.memories.pop(m_key).title
+
+                # remove from m_matches so deleted memory not shown in memory selection memnu
+                m_matches .pop(m_key)
+                self.altered = True
+
+                print('Successfully removed \'{}\''.format(title))
+            else:
+                break
+
+    def _select_memory_from_list(self, m_matches, action_description):
+        """
+        :type m_matches: dict
+        :type action_description: str
+        :returns m_id of selected memory or 0
+        :rtype int
+        """
+        if len(self.memories) > 0:
+            print('{} which memory?'.format(action_description))
+            [print('{}) [{}%] {}'.format(m_key, m.search_score, m.title)) for m_key,m in m_matches.items()]
             selection = input('> ')
-            if selection == 'x':
-                exit()
-            elif valid_input(selection):
+            if valid_input(selection):
                 selection = int(selection)
                 if selection in self.memories:
                     return selection
                 else:
                     print('Invalid memory selection \'{}\''.format(selection))
-            else:
-                print('Invalid entry \'{}\''.format(selection))
+        else:
+            print('No memories exist')
+        return 0
 
 class Memory:
     def __init__(self):
@@ -141,7 +182,7 @@ class Memory:
         self.body = default_input('Body: ', self.body)
     def edit_menu(self):
         while True:
-            print('1) Edit Title\n2) Edit Keywords\n3) Edit Body\n4) Done')
+            print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
             selection = input('> ')
 
             if valid_input(selection):
@@ -153,10 +194,11 @@ class Memory:
                 }
 
                 if selection not in options:
-                    if len(input('Press ENTER to exit')) == 0:
-                        return
+                    break
                 else:
                     options[selection]()
+            else:
+                break
 
     def make_set(self):
         m_data = ' '.join([self.title, self.keywords, self.body])
@@ -171,7 +213,7 @@ def read_pkl(pkl_file):
         print('{0} not found, creating new {0} file'.format(pkl_file))
     except Exception as e:
         print('Error occured while loading {}\n{}'.format(pkl_file, e.args))
-    return None
+    return
 
 def write_pkl(pkl_file, payload):
     try:
@@ -203,7 +245,7 @@ def main(argv):
         brain.edit_memory(user_keywords)
     elif len(user_keywords) > 0:
         if len(brain.memories) > 0:
-            brain.recall_memory(user_keywords)
+            brain.display_memory(user_keywords)
         else:
             print('No memories exist')
     else:
