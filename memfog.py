@@ -1,85 +1,28 @@
 """
 
 Usage: memfog [--add|--remove|--edit] [<keyword>...] [--top <n>]
-       memfog [--backup <path>]
+       memfog [--backup <p>] [--import <p>]
 
 Options:
-  -h --help           Show this screen
-  -v --version        Show version
-  -a --add            Create new memory record
-  -r --remove         List records containing keywords and remove selected
-  -e --edit           List records containing keywords and edit details of selected
-  -t --top <n>        Limit results to top n memories
-  -b --backup <path>  Create a json backup of memory data that can be imported
+  -h --help        Show this screen
+  -v --version     Show version
+  -a --add         Create new memory record
+  -r --remove      List records containing keywords and remove selected
+  -e --edit        List records containing keywords and edit details of selected
+  -t --top <n>     Limit results to top n memories
+  -b --backup <p>  Backup memories as json file to directory at path p
+  -l --load <p>    Load memories from json at path p
 
 """
+import datetime
+import os
+import shlex
+import string
+import jsonpickle
 from docopt import docopt
 from fuzzywuzzy import fuzz
-import datetime
-import readline
-import pickle
-import jsonpickle
-import string
-import shlex
-import os
 
-def default_input(prompt, prefill=''):
-    """
-    :type prompt: str
-    :type prefill: str
-    :returns: str from input prompt entry populated by default with editable text from prefill
-    """
-    readline.set_startup_hook(lambda: readline.insert_text(prefill))
-    try:
-        return input(prompt)
-    finally:
-        readline.set_startup_hook()
-
-def pkl_from_file(file_path):
-    """
-    :type file_path: str
-    """
-    try:
-        with open(file_path, 'rb') as in_stream:
-            if os.path.getsize(file_path) > 0:
-                return pickle.load(in_stream)
-    except FileNotFoundError:
-        print('{0} not found, creating new {0} file'.format(file_path))
-    except Exception as e:
-        print('Error occured while loading {}\n{}'.format(file_path, e.args))
-    return
-
-def pkl_to_file(file_path, payload):
-    """
-    :type file_path: str
-    :type payload: Brain
-    """
-    try:
-        with open(file_path, 'wb') as out_stream:
-            pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
-            print('Successfully saved {}'.format(file_path))
-    except Exception as e:
-        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
-
-def str_from_file(file_path):
-    """
-    :type file_path: str
-    :retuers: contents of file at file_path as str
-    """
-    with open(file_path, 'r') as f:
-        return f.read()
-
-def str_to_file(file_path, payload):
-    """
-    :type file_path: str
-    :type payload: str
-    """
-    try:
-        with open(file_path, 'w') as f:
-            f.write(payload)
-        print('Export to {} successfull'.format(file_path))
-    except Exception as e:
-        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
+from src import io, user
 
 def strip_whitespace(s):
     """
@@ -106,13 +49,7 @@ def standardize(s):
     arr_no_ws = map(strip_whitespace, arr)
     return [w for w in arr_no_ws if len(w) > 0]
 
-def user_cofirm(msg=''):
-    """
-    :rtype: bool
-    """
-    return input('Confirm {} - y/n?\n> '.format(msg)).lower() == 'y'
-
-def valid_input(s):
+def is_valid(s):
     """
     :type s: str
     :rtype: bool
@@ -138,11 +75,11 @@ class Brain:
         backup_path += 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
 
         if os.path.isfile(backup_path):
-            if not user_cofirm('overwrite of existing file {}'.format(backup_path)):
+            if not user.confirm('overwrite of existing file {}'.format(backup_path)):
                 return
 
         mems = ''.join(map(jsonpickle.encode, self.memories.values()))
-        str_to_file(backup_path, mems)
+        io.str_to_file(backup_path, mems)
 
     def create_memory(self, user_title=None):
         """
@@ -253,7 +190,7 @@ class Brain:
 
             selection = input('> ')
 
-            if valid_input(selection):
+            if is_valid(selection):
                 selection = int(selection)
                 if selection in self.memories:
                     return selection
@@ -278,7 +215,7 @@ class Memory:
             print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
             selection = input('> ')
 
-            if valid_input(selection):
+            if is_valid(selection):
                 selection = int(selection)
                 options = {
                     1:self.update_title,
@@ -298,17 +235,17 @@ class Memory:
         return set(standardize(m_data))
 
     def update_title(self):
-        self.title = default_input('Title: ', self.title)
+        self.title = user.prefilled_input('Title: ', self.title)
 
     def update_keywords(self):
-        self.keywords = default_input('Keywords: ', self.keywords)
+        self.keywords = user.prefilled_input('Keywords: ', self.keywords)
 
     def update_body(self):
-        self.body = default_input('Body: ', self.body)
+        self.body = user.prefilled_input('Body: ', self.body)
 
 def main(argv):
     brain_file = 'brain.pkl'
-    brain = pkl_from_file(brain_file)
+    brain = io.pkl_from_file(brain_file)
     print(argv)
 
     if not brain:
@@ -318,7 +255,7 @@ def main(argv):
     top_n = argv['--top']
     if top_n:
         top_n = top_n[0]
-        if valid_input(top_n):
+        if is_valid(top_n):
             brain.top_n = int(top_n)
         else:
             print('Invalid threshold value \'{}\''.format(top_n))
@@ -342,7 +279,7 @@ def main(argv):
 
     if brain.altered:
         brain.altered = False
-        pkl_to_file(brain_file, brain)
+        io.pkl_to_file(brain_file, brain)
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='memfog v1.0.0')
