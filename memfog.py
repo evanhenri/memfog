@@ -1,8 +1,6 @@
-"""memfog
-Usage:
-  memfog.py [<keyword>...]
-            [--add | --remove | --edit]
-            [(<keyword>... --add | --remove | --edit)]
+"""
+
+Usage: memfdog.py [--top=<n>] [--add|--remove|--edit] [<keyword>...]
 
 Options:
   -h --help     Show this screen
@@ -10,8 +8,11 @@ Options:
   -a --add      Create new memory record
   -r --remove   List records containing keywords and remove selected
   -e --edit     List records containing keywords and edit details of selected
+  -t --top=<n>  Limit results to top n memories
+
 """
 from docopt import docopt
+from fuzzywuzzy import fuzz
 import readline
 import pickle
 import string
@@ -66,6 +67,7 @@ class Brain:
         self.memory_keys = {1}
         self.memories = {}
         self.altered = False
+        self.top_n = None
 
     def create_memory(self, user_title=None):
         """
@@ -120,16 +122,19 @@ class Brain:
         :type user_keywords: str
         :returns: self.memories dict sorted by memory_obj.search_score in ascending order
         """
-        user_set = set(standardize(user_keywords))
-        user_set_count = len(user_set)
+
+        user_set = ''.join(set(standardize(user_keywords)))
+        print(user_set)
 
         for m in self.memories.values():
-            m_keywords = m.make_set()
-            m_score = len(user_set.intersection(m_keywords))
-            if user_set_count > 0:
-                m.search_score = m_score / user_set_count * 100
+            m_keywords = ' '.join(m.make_set())
+            print(m_keywords)
+            m.search_score = fuzz.token_sort_ratio(m_keywords, user_set)
 
-        return dict(sorted(self.memories.items(), key=lambda x: x[1]))
+        # if self.top_n:
+        #     return dict(sorted(self.memories.items(), key=lambda x: x[1]))
+
+        return [*sorted(self.memories.items(), key=lambda x: x[1])]
 
     def display_memory(self, user_keywords):
         """
@@ -154,25 +159,28 @@ class Brain:
                 # reclaim key of deleted memory so it can be reused
                 self.memory_keys.add(m_key)
 
-                title = self.memories.pop(m_key).title
+                m = self.memories.pop(m_key)
 
                 # remove from m_matches so deleted memory not shown in memory selection memnu
-                m_matches .pop(m_key)
+                m_matches.remove((m_key, m))
                 self.altered = True
 
-                print('Successfully removed \'{}\''.format(title))
+                print('Successfully removed \'{}\''.format(m.title))
             else:
                 break
 
     def _select_memory_from_list(self, m_matches, action_description):
         """
-        :type m_matches: dict
+        :type m_matches: list
         :type action_description: str
         :returns: m_id int of selected memory or 0
         """
         if len(self.memories) > 0:
             print('{} which memory?'.format(action_description))
-            [print('{}) [{}%] {}'.format(m_key, m.search_score, m.title)) for m_key,m in m_matches.items()]
+            for m_key,m in m_matches:
+                if self.top_n is None or m.search_score >= self.top_n:
+                    print('{}) [{}%] {}'.format(m_key, m.search_score, m.title))
+
             selection = input('> ')
             if valid_input(selection):
                 selection = int(selection)
@@ -257,6 +265,14 @@ def main(argv):
         brain = Brain()
         brain.altered = True
 
+    top_n = argv['--top']
+    if top_n:
+        top_n = top_n[0]
+        if valid_input(top_n):
+            brain.top_n = int(top_n)
+        else:
+            print('Invalid threshold value \'{}\''.format(top_n))
+
     # delimit words with whitespace so they can be processed at same time as memory string data
     user_keywords = ' '.join(argv['<keyword>'])
 
@@ -267,13 +283,10 @@ def main(argv):
         brain.remove_memory(user_keywords)
     elif argv['--edit']:
         brain.edit_memory(user_keywords)
-    elif len(user_keywords) > 0:
-        if len(brain.memories) > 0:
-            brain.display_memory(user_keywords)
-        else:
-            print('No memories exist')
+    elif len(brain.memories) > 0:
+        brain.display_memory(user_keywords)
     else:
-        print('No keywords supplied')
+        print('No memories exist')
 
     if brain.altered:
         brain.altered = False
