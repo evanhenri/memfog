@@ -11,18 +11,24 @@ Options:
   -e --edit        List records containing keywords and edit details of selected
   -t --top <n>     Limit results to top n memories
   -b --backup <p>  Backup memories as json file to directory at path p
-  -l --load <p>    Load memories from json at path p
+  -i --import <p>  Load memories from json at path p
 
 """
 import datetime
 import os
 import shlex
 import string
-import jsonpickle
 from docopt import docopt
 from fuzzywuzzy import fuzz
 
 from src import io, user
+
+def is_valid_input(s):
+    """
+    :type s: str
+    :rtype: bool
+    """
+    return len(s) > 0 and s.isdigit() and int(s) >= 0
 
 def strip_whitespace(s):
     """
@@ -49,13 +55,6 @@ def standardize(s):
     arr_no_ws = map(strip_whitespace, arr)
     return [w for w in arr_no_ws if len(w) > 0]
 
-def is_valid(s):
-    """
-    :type s: str
-    :rtype: bool
-    """
-    return len(s) > 0 and s.isdigit() and int(s) >= 0
-
 class Brain:
     def __init__(self):
         self.memory_keys = {1}
@@ -63,23 +62,23 @@ class Brain:
         self.altered = False
         self.top_n = 0
 
-    def backup(self, backup_path):
-        if not os.path.exists(backup_path):
-            print('{} does not exist, saving backup to {}'.format(backup_path, os.getcwd()))
-            backup_path = os.getcwd()
+    def backup_memories(self, dir_path):
+        if not os.path.exists(dir_path):
+            print('{} does not exist, saving backup to {}'.format(dir_path, os.getcwd()))
+            dir_path = os.getcwd()
 
-        elif backup_path[-1] != '/':
-            backup_path += '/'
+        if dir_path[-1] != '/':
+            dir_path += '/'
 
         date = datetime.datetime.now()
-        backup_path += 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
+        dir_path += 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
 
-        if os.path.isfile(backup_path):
-            if not user.confirm('overwrite of existing file {}'.format(backup_path)):
+        if os.path.isfile(dir_path):
+            if not user.confirm('overwrite of existing file {}'.format(dir_path)):
                 return
 
-        mems = ''.join(map(jsonpickle.encode, self.memories.values()))
-        io.str_to_file(backup_path, mems)
+        m_json = [m.get_backup() for m in self.memories.values()]
+        io.json_to_file(dir_path, m_json)
 
     def create_memory(self, user_title=None):
         """
@@ -141,6 +140,22 @@ class Brain:
             self.memory_keys.add(next_key + 1)
         return next_key
 
+    def import_memories(self, file_path):
+        """
+        :type file_path: str
+        """
+        json_memories = io.json_from_file(file_path)
+
+        for json_m in json_memories:
+            m = Memory()
+            m.title = json_m['title']
+            m.keywords = json_m['keywords']
+            m.body = json_m['body']
+            self.memories.setdefault(self._get_memory_key(), m)
+        self.altered = True
+
+        print('Successfully imported {} memories'.format(len(json_memories)))
+
     def _memory_match(self, user_keywords):
         """
         :type user_keywords: str
@@ -190,7 +205,7 @@ class Brain:
 
             selection = input('> ')
 
-            if is_valid(selection):
+            if is_valid_input(selection):
                 selection = int(selection)
                 if selection in self.memories:
                     return selection
@@ -210,12 +225,15 @@ class Memory:
     def __gt__(self, other_memory):
         return self.search_score > other_memory.search_score
 
+    def get_backup(self):
+        return {k:v for k,v in self.__dict__.items() if k != 'search_score'}
+
     def edit_menu(self):
         while True:
             print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
             selection = input('> ')
 
-            if is_valid(selection):
+            if is_valid_input(selection):
                 selection = int(selection)
                 options = {
                     1:self.update_title,
@@ -244,9 +262,8 @@ class Memory:
         self.body = user.prefilled_input('Body: ', self.body)
 
 def main(argv):
-    brain_file = 'brain.pkl'
+    brain_file = '{}/brain.pkl'.format(os.path.dirname(os.path.realpath(__file__)))
     brain = io.pkl_from_file(brain_file)
-    print(argv)
 
     if not brain:
         brain = Brain()
@@ -255,7 +272,7 @@ def main(argv):
     top_n = argv['--top']
     if top_n:
         top_n = top_n[0]
-        if is_valid(top_n):
+        if is_valid_input(top_n):
             brain.top_n = int(top_n)
         else:
             print('Invalid threshold value \'{}\''.format(top_n))
@@ -271,7 +288,9 @@ def main(argv):
     elif argv['--edit']:
         brain.edit_memory(user_keywords)
     elif argv['--backup']:
-        brain.backup(argv['--backup'])
+        brain.backup_memories(argv['--backup'])
+    elif argv['--import']:
+        brain.import_memories(argv['--import'])
     elif len(brain.memories) > 0:
         brain.display_memory(user_keywords)
     else:
