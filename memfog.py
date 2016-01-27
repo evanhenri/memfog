@@ -21,15 +21,7 @@ import pickle
 import jsonpickle
 import string
 import shlex
-import json
 import os
-
-def valid_input(s):
-    """
-    :type s: str
-    :rtype: bool
-    """
-    return len(s) > 0 and s.isdigit() and int(s) >= 0
 
 def default_input(prompt, prefill=''):
     """
@@ -42,6 +34,52 @@ def default_input(prompt, prefill=''):
         return input(prompt)
     finally:
         readline.set_startup_hook()
+
+def pkl_from_file(file_path):
+    """
+    :type file_path: str
+    """
+    try:
+        with open(file_path, 'rb') as in_stream:
+            if os.path.getsize(file_path) > 0:
+                return pickle.load(in_stream)
+    except FileNotFoundError:
+        print('{0} not found, creating new {0} file'.format(file_path))
+    except Exception as e:
+        print('Error occured while loading {}\n{}'.format(file_path, e.args))
+    return
+
+def pkl_to_file(file_path, payload):
+    """
+    :type file_path: str
+    :type payload: Brain
+    """
+    try:
+        with open(file_path, 'wb') as out_stream:
+            pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
+            print('Successfully saved {}'.format(file_path))
+    except Exception as e:
+        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
+
+def str_from_file(file_path):
+    """
+    :type file_path: str
+    :retuers: contents of file at file_path as str
+    """
+    with open(file_path, 'r') as f:
+        return f.read()
+
+def str_to_file(file_path, payload):
+    """
+    :type file_path: str
+    :type payload: str
+    """
+    try:
+        with open(file_path, 'w') as f:
+            f.write(payload)
+        print('Export to {} successfull'.format(file_path))
+    except Exception as e:
+        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
 
 def strip_whitespace(s):
     """
@@ -73,6 +111,13 @@ def user_cofirm(msg=''):
     :rtype: bool
     """
     return input('Confirm {} - y/n?\n> '.format(msg)).lower() == 'y'
+
+def valid_input(s):
+    """
+    :type s: str
+    :rtype: bool
+    """
+    return len(s) > 0 and s.isdigit() and int(s) >= 0
 
 class Brain:
     def __init__(self):
@@ -228,15 +273,6 @@ class Memory:
     def __gt__(self, other_memory):
         return self.search_score > other_memory.search_score
 
-    def update_title(self):
-        self.title = default_input('Title: ', self.title)
-
-    def update_keywords(self):
-        self.keywords = default_input('Keywords: ', self.keywords)
-
-    def update_body(self):
-        self.body = default_input('Body: ', self.body)
-
     def edit_menu(self):
         while True:
             print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
@@ -261,51 +297,14 @@ class Memory:
         m_data = ' '.join([self.title, self.keywords, self.body])
         return set(standardize(m_data))
 
-def pkl_from_file(file_path):
-    """
-    :type file_path: str
-    """
-    try:
-        with open(file_path, 'rb') as in_stream:
-            if os.path.getsize(file_path) > 0:
-                return pickle.load(in_stream)
-    except FileNotFoundError:
-        print('{0} not found, creating new {0} file'.format(file_path))
-    except Exception as e:
-        print('Error occured while loading {}\n{}'.format(file_path, e.args))
-    return
+    def update_title(self):
+        self.title = default_input('Title: ', self.title)
 
-def pkl_to_file(file_path, payload):
-    """
-    :type file_path: str
-    :type payload: Brain
-    """
-    try:
-        with open(file_path, 'wb') as out_stream:
-            pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
-            print('Successfully saved {}'.format(file_path))
-    except Exception as e:
-        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
+    def update_keywords(self):
+        self.keywords = default_input('Keywords: ', self.keywords)
 
-def str_from_file(file_path):
-    """
-    :type file_path: str
-    :retuers: contents of file at file_path as str
-    """
-    with open(file_path, 'r') as f:
-        return f.read()
-
-def str_to_file(file_path, payload):
-    """
-    :type file_path: str
-    :type payload: str
-    """
-    try:
-        with open(file_path, 'w') as f:
-            f.write(payload)
-        print('Export to {} successfull'.format(file_path))
-    except Exception as e:
-        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
+    def update_body(self):
+        self.body = default_input('Body: ', self.body)
 
 def main(argv):
     brain_file = 'brain.pkl'
