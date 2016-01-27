@@ -1,21 +1,27 @@
 """
 
-Usage: memfdog.py [--top=<n>] [--add|--remove|--edit] [<keyword>...]
+Usage: memfog [--add|--remove|--edit] [<keyword>...] [--top <n>]
+       memfog [--backup <path>]
 
 Options:
-  -h --help     Show this screen
-  -v --version  Show version
-  -a --add      Create new memory record
-  -r --remove   List records containing keywords and remove selected
-  -e --edit     List records containing keywords and edit details of selected
-  -t --top=<n>  Limit results to top n memories
+  -h --help           Show this screen
+  -v --version        Show version
+  -a --add            Create new memory record
+  -r --remove         List records containing keywords and remove selected
+  -e --edit           List records containing keywords and edit details of selected
+  -t --top <n>        Limit results to top n memories
+  -b --backup <path>  Create a json backup of memory data that can be imported
 
 """
 from docopt import docopt
 from fuzzywuzzy import fuzz
+import datetime
 import readline
 import pickle
+import jsonpickle
 import string
+import shlex
+import json
 import os
 
 def valid_input(s):
@@ -58,16 +64,40 @@ def standardize(s):
     :returns: list of non-empty words strings from s stripped of whitespace and punctuation
     """
     stripped = strip_punctuation(s).lower()
-    arr = stripped.split(' ')
+    arr = shlex.split(stripped)
     arr_no_ws = map(strip_whitespace, arr)
     return [w for w in arr_no_ws if len(w) > 0]
+
+def user_cofirm(msg=''):
+    """
+    :rtype: bool
+    """
+    return input('Confirm {} - y/n?\n> '.format(msg)).lower() == 'y'
 
 class Brain:
     def __init__(self):
         self.memory_keys = {1}
         self.memories = {}
         self.altered = False
-        self.top_n = None
+        self.top_n = 0
+
+    def backup(self, backup_path):
+        if not os.path.exists(backup_path):
+            print('{} does not exist, saving backup to {}'.format(backup_path, os.getcwd()))
+            backup_path = os.getcwd()
+
+        elif backup_path[-1] != '/':
+            backup_path += '/'
+
+        date = datetime.datetime.now()
+        backup_path += 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
+
+        if os.path.isfile(backup_path):
+            if not user_cofirm('overwrite of existing file {}'.format(backup_path)):
+                return
+
+        mems = ''.join(map(jsonpickle.encode, self.memories.values()))
+        str_to_file(backup_path, mems)
 
     def create_memory(self, user_title=None):
         """
@@ -89,6 +119,18 @@ class Brain:
         self.altered = True
 
         print('Successfully added \'{}\''.format(m.title))
+
+    def display_memory(self, user_keywords):
+        """
+        :type user_keywords: str
+        """
+        m_matches = self._memory_match(user_keywords)
+        while True:
+            m_key = self._select_memory_from_list(m_matches, 'Display')
+            if m_key:
+                print('{}\n\t{}'.format(self.memories[m_key].title, self.memories[m_key].body))
+            else:
+                break
 
     def edit_memory(self, user_keywords):
         """
@@ -122,37 +164,20 @@ class Brain:
         :type user_keywords: str
         :returns: self.memories dict sorted by memory_obj.search_score in ascending order
         """
-
         user_set = ''.join(set(standardize(user_keywords)))
-        print(user_set)
 
         for m in self.memories.values():
             m_keywords = ' '.join(m.make_set())
-            print(m_keywords)
             m.search_score = fuzz.token_sort_ratio(m_keywords, user_set)
 
-        # if self.top_n:
-        #     return dict(sorted(self.memories.items(), key=lambda x: x[1]))
-
         return [*sorted(self.memories.items(), key=lambda x: x[1])]
-
-    def display_memory(self, user_keywords):
-        """
-        :type user_keywords: str
-        """
-        m_matches = self._memory_match(user_keywords)
-        while True:
-            m_key = self._select_memory_from_list(m_matches, 'Display')
-            if m_key:
-                print('{}\n\t{}'.format(self.memories[m_key].title, self.memories[m_key].body))
-            else:
-                break
 
     def remove_memory(self, user_keywords):
         """
         :type user_keywords: str
         """
         m_matches = self._memory_match(user_keywords)
+
         while True:
             m_key = self._select_memory_from_list(m_matches, 'Remove')
             if m_key:
@@ -177,11 +202,12 @@ class Brain:
         """
         if len(self.memories) > 0:
             print('{} which memory?'.format(action_description))
-            for m_key,m in m_matches:
-                if self.top_n is None or m.search_score >= self.top_n:
-                    print('{}) [{}%] {}'.format(m_key, m.search_score, m.title))
+
+            for m_key,m in m_matches[-self.top_n::]:
+                print('{}) [{}%] {}'.format(m_key, m.search_score, m.title))
 
             selection = input('> ')
+
             if valid_input(selection):
                 selection = int(selection)
                 if selection in self.memories:
@@ -198,15 +224,19 @@ class Memory:
         self.keywords = ''
         self.body = ''
         self.search_score = 0
+
     def __gt__(self, other_memory):
         return self.search_score > other_memory.search_score
 
     def update_title(self):
         self.title = default_input('Title: ', self.title)
+
     def update_keywords(self):
         self.keywords = default_input('Keywords: ', self.keywords)
+
     def update_body(self):
         self.body = default_input('Body: ', self.body)
+
     def edit_menu(self):
         while True:
             print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
@@ -231,35 +261,56 @@ class Memory:
         m_data = ' '.join([self.title, self.keywords, self.body])
         return set(standardize(m_data))
 
-def read_pkl(pkl_file):
+def pkl_from_file(file_path):
     """
-    :type pkl_file: str
+    :type file_path: str
     """
     try:
-        with open(pkl_file, 'rb') as in_stream:
-            if os.path.getsize(pkl_file) > 0:
+        with open(file_path, 'rb') as in_stream:
+            if os.path.getsize(file_path) > 0:
                 return pickle.load(in_stream)
     except FileNotFoundError:
-        print('{0} not found, creating new {0} file'.format(pkl_file))
+        print('{0} not found, creating new {0} file'.format(file_path))
     except Exception as e:
-        print('Error occured while loading {}\n{}'.format(pkl_file, e.args))
+        print('Error occured while loading {}\n{}'.format(file_path, e.args))
     return
 
-def write_pkl(pkl_file, payload):
+def pkl_to_file(file_path, payload):
     """
-    :type pkl_file: str
+    :type file_path: str
     :type payload: Brain
     """
     try:
-        with open(pkl_file, 'wb') as out_stream:
+        with open(file_path, 'wb') as out_stream:
             pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
-            print('Successfully saved {}'.format(pkl_file))
+            print('Successfully saved {}'.format(file_path))
     except Exception as e:
-        print('Error occured while saving {}\n{}'.format(pkl_file, e.args))
+        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
+
+def str_from_file(file_path):
+    """
+    :type file_path: str
+    :retuers: contents of file at file_path as str
+    """
+    with open(file_path, 'r') as f:
+        return f.read()
+
+def str_to_file(file_path, payload):
+    """
+    :type file_path: str
+    :type payload: str
+    """
+    try:
+        with open(file_path, 'w') as f:
+            f.write(payload)
+        print('Export to {} successfull'.format(file_path))
+    except Exception as e:
+        print('Error occured while exporting to {}\n{}'.format(file_path, e.args))
 
 def main(argv):
     brain_file = 'brain.pkl'
-    brain = read_pkl(brain_file)
+    brain = pkl_from_file(brain_file)
+    print(argv)
 
     if not brain:
         brain = Brain()
@@ -283,6 +334,8 @@ def main(argv):
         brain.remove_memory(user_keywords)
     elif argv['--edit']:
         brain.edit_memory(user_keywords)
+    elif argv['--backup']:
+        brain.backup(argv['--backup'])
     elif len(brain.memories) > 0:
         brain.display_memory(user_keywords)
     else:
@@ -290,7 +343,7 @@ def main(argv):
 
     if brain.altered:
         brain.altered = False
-        write_pkl(brain_file, brain)
+        pkl_to_file(brain_file, brain)
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='memfog v1.0.0')
