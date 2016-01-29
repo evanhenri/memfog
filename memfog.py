@@ -30,13 +30,6 @@ def is_valid_input(s):
     """
     return len(s) > 0 and s.isdigit() and int(s) >= 0
 
-def strip_whitespace(s):
-    """
-    :type s: str
-    :returns: s stripped or whitespace
-    """
-    return ''.join([c for c in s if c not in string.whitespace])
-
 def strip_punctuation(s):
     """
     :type s: str
@@ -51,9 +44,7 @@ def standardize(s):
     :returns: list of non-empty words strings from s stripped of whitespace and punctuation
     """
     stripped = strip_punctuation(s).lower()
-    arr = shlex.split(stripped)
-    arr_no_ws = map(strip_whitespace, arr)
-    return [w for w in arr_no_ws if len(w) > 0]
+    return shlex.shlex(stripped)
 
 class Brain:
     def __init__(self):
