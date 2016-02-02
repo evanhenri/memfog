@@ -50,6 +50,8 @@ class Brain:
     def __init__(self):
         self.memory_keys = {1}
         self.memories = {}
+
+        # flag used to determine if brain.pkl must be re-written
         self.altered = False
         self.top_n = 0
 
@@ -77,15 +79,20 @@ class Brain:
         """
         m = Memory()
 
-        # if user provided a title in cli args, set memory title using that entry
-        if user_title:
-            m.title = user_title
-        # otherwise prompt them for a title entry
-        else:
-            m.update_title()
+        # prevent spewing of exception if ^c used to cancel adding a memory
+        try:
+            # if user provided a title in cli args, set memory title using that entry
+            if user_title:
+                m.title = user_title
+            # otherwise prompt them for a title entry
+            else:
+                m.update_title()
 
-        m.update_keywords()
-        m.update_body()
+            m.update_keywords()
+            m.update_body()
+        except KeyboardInterrupt:
+            print('\nDiscarded new memory data')
+            return
 
         self.memories.setdefault(self._get_memory_key(), m)
         self.altered = True
@@ -292,11 +299,5 @@ def main(argv):
         io.pkl_to_file(brain_file, brain)
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.0.0')
+    args = docopt(__doc__, version='memfog v1.0.1')
     main(args)
-
-"""
-todo
-
-
-"""
