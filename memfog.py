@@ -108,6 +108,7 @@ class Brain:
             m_key = self._select_memory_from_list(m_matches, 'Display')
             if m_key:
                 print('{}\n\t{}'.format(self.memories[m_key].title, self.memories[m_key].body))
+                input('...')
             else:
                 break
 
@@ -247,7 +248,8 @@ class Memory:
                 break
 
     def make_set(self):
-        m_data = ' '.join([self.title, self.keywords, self.body])
+        #m_data = ' '.join([self.title, self.keywords, self.body])
+        m_data = ' '.join([self.title, self.keywords])
         return set(standardize(m_data))
 
     def update_title(self):
