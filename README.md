@@ -5,23 +5,18 @@ Leave yourself healpful notes for later reference and find them again using fuzz
 ```
 # Add a memory that you may want to reference later
 memfog.py -a
-
-# add title
-<Add a title> Without checking if key in dict, retrieve key value if present, otherwise add to dict 
-
-# add keywords
-<Add keywords> python dictionary dict add insert retrieve get "without checking" one liner
-
-# add body
-> dict_obj.setdefault(key, default value), get value for key is returned if key in dict
-             otherwise key value pair added to dict and returned
+Title: <your title text>
+Keywords: <keywords you think you would use search for current memory>
+Body: <body text describing the memory you want to recall>
 
 # Lookup a stored memory by vague keywords
-memfog.py dict get or insert without checking
+memfog.py how to do <task> i did before but forgot how to do
 0) [0%] How to fly
 1) [4%] How to run
-2) [72%] Without checking if key in dict, retrieve key value if present, otherwise add to dict
+2) [72%] How to do <task>
 > 2
 
-<body for memory 2 is show>
+The body for memory #2 is then displayed
+
+Ctrl-C at any time to discard the memory if you decide not to save it 
 ```
