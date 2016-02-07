@@ -69,5 +69,5 @@ def main(argv):
         io.pkl_to_file(brain_file, brain_obj)
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.0.1')
+    args = docopt(__doc__, version='memfog v1.1.0')
     main(args)
