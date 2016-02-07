@@ -60,7 +60,7 @@ class Brain:
         self.memories.setdefault(self._get_memory_key(), m)
         self.altered = True
 
-        print('Successfully added \'{}\''.format(m.title))
+        print('Added \'{}\''.format(m.title))
 
     def display_memory(self, user_keywords):
         """
@@ -86,7 +86,7 @@ class Brain:
                 self.memories[m_key].edit_menu()
                 self.altered = True
 
-                print('Successfully edited \'{}\''.format(self.memories[m_key].title))
+                print('Edited \'{}\''.format(self.memories[m_key].title))
             else:
                 break
 
@@ -116,7 +116,7 @@ class Brain:
             self.memories.setdefault(self._get_memory_key(), m)
         self.altered = True
 
-        print('Successfully imported {} memories'.format(len(json_memories)))
+        print('Imported {} memories'.format(len(json_memories)))
 
     def _memory_match(self, user_keywords):
         """
@@ -154,7 +154,7 @@ class Brain:
                 m_matches.remove((m_key, m))
                 self.altered = True
 
-                print('Successfully removed \'{}\''.format(m.title))
+                print('Removed \'{}\''.format(m.title))
             else:
                 break
 

@@ -20,7 +20,7 @@ def json_to_file(file_path, payload):
     try:
         with open(file_path, 'w') as f:
             json.dump(payload, f, indent=4)
-        print('Successfully saved {}'.format(file_path))
+        print('Saved {}'.format(file_path))
     except Exception as e:
         print('Error occured while writing json to {}\n{}'.format(file_path, e.args))
 
@@ -55,7 +55,7 @@ def pkl_to_file(file_path, payload):
     try:
         with open(file_path, 'wb') as out_stream:
             pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
-        print('Successfully saved {}'.format(file_path))
+        print('Saved {}'.format(file_path))
     except Exception as e:
         print('Error occured while writing pkl to {}\n{}'.format(file_path, e.args))
 
