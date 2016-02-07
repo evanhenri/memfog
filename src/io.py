@@ -53,7 +53,7 @@ def pkl_to_file(file_path, payload):
 def str_from_file(file_path):
     """
     :type file_path: str
-    :retuers: contents of file at file_path as str
+    :returns: contents of file at file_path as str
     """
     try:
         with open(file_path, 'r') as f:
@@ -72,3 +72,20 @@ def str_to_file(file_path, payload):
         print('Export to {} successfull'.format(file_path))
     except Exception as e:
         print('Error occured while writing to {}\n{}'.format(file_path, e.args))
+
+def mkfile(file_path):
+    """
+    :type file_path: str
+    """
+    open(file_path, 'w').close()
+
+def set_from_file(file_path):
+    """
+    :type file_path: str
+    :returns: contents of file at file_path where each line is an element in returned set
+    """
+    try:
+        with open(file_path, 'r') as f:
+            return set([line.strip() for line in f.readlines()])
+    except Exception as e:
+        print('Error occured while reading from {}\n{}'.format(file_path, e.args))
