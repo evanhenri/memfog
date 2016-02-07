@@ -10,7 +10,7 @@ def json_from_file(file_path):
         with open(file_path, 'r') as f:
             return json.load(f)
     except Exception as e:
-        print('Error occured while reading from {}\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as json\n{}'.format(file_path, e.args))
 
 def json_to_file(file_path, payload):
     """
@@ -22,7 +22,16 @@ def json_to_file(file_path, payload):
             json.dump(payload, f, indent=4)
         print('Successfully saved {}'.format(file_path))
     except Exception as e:
-        print('Error occured while writing to {}\n{}'.format(file_path, e.args))
+        print('Error occured while writing json to {}\n{}'.format(file_path, e.args))
+
+def mkfile(file_path):
+    """
+    :type file_path: str
+    """
+    try:
+        open(file_path, 'w').close()
+    except Exception as e:
+        print('Error occured while making file {}\n{}'.format(file_path, e.args))
 
 def pkl_from_file(file_path):
     """
@@ -34,9 +43,9 @@ def pkl_from_file(file_path):
                 print('loaded from' + file_path)
                 return pickle.load(in_stream)
     except FileNotFoundError:
-        print('{0} not found, creating new {0} file'.format(file_path))
+        print('{0} not found'.format(file_path))
     except Exception as e:
-        print('Error occured while reading from {}\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as pkl\n{}'.format(file_path, e.args))
 
 def pkl_to_file(file_path, payload):
     """
@@ -48,7 +57,31 @@ def pkl_to_file(file_path, payload):
             pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
         print('Successfully saved {}'.format(file_path))
     except Exception as e:
-        print('Error occured while writing to {}\n{}'.format(file_path, e.args))
+        print('Error occured while writing pkl to {}\n{}'.format(file_path, e.args))
+
+def set_from_file(file_path):
+    """
+    :type file_path: str
+    :returns: contents of file at file_path where each line is an element in returned set
+    """
+    try:
+        with open(file_path, 'r') as f:
+            return set([line.strip() for line in f.readlines()])
+    except Exception as e:
+        print('Error occured while reading {} as set\n{}'.format(file_path, e.args))
+
+def seq_to_file(file_path, payload, delim='\n'):
+    """
+    :type file_path: str
+    :type payload: str
+    :type delim: str
+    """
+    delim_payload = delim.join(payload)
+    try:
+        with open(file_path, 'w') as f:
+            f.writelines(delim_payload)
+    except Exception as e:
+        print('Error occured while writing sequence to {}\n{}'.format(file_path, e.args))
 
 def str_from_file(file_path):
     """
@@ -59,7 +92,7 @@ def str_from_file(file_path):
         with open(file_path, 'r') as f:
             return f.read()
     except Exception as e:
-        print('Error occured while reading from {}\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as string\n{}'.format(file_path, e.args))
 
 def str_to_file(file_path, payload):
     """
@@ -71,21 +104,4 @@ def str_to_file(file_path, payload):
             f.write(payload)
         print('Export to {} successfull'.format(file_path))
     except Exception as e:
-        print('Error occured while writing to {}\n{}'.format(file_path, e.args))
-
-def mkfile(file_path):
-    """
-    :type file_path: str
-    """
-    open(file_path, 'w').close()
-
-def set_from_file(file_path):
-    """
-    :type file_path: str
-    :returns: contents of file at file_path where each line is an element in returned set
-    """
-    try:
-        with open(file_path, 'r') as f:
-            return set([line.strip() for line in f.readlines()])
-    except Exception as e:
-        print('Error occured while reading from {}\n{}'.format(file_path, e.args))
+        print('Error occured while writing string to {}\n{}'.format(file_path, e.args))
