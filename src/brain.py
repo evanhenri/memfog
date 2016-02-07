@@ -13,6 +13,9 @@ class Brain:
         self.altered = False
         self.top_n = 10
 
+        # words to omit from fuzzy string search, e.g. and the is are etc.
+        self.excluded_words = set()
+
     def backup_memories(self, dir_path):
         if not dir_path:
             dir_path = os.getcwd()
@@ -123,7 +126,12 @@ class Brain:
         user_set = ''.join(set(data.standardize(user_keywords)))
 
         for m in self.memories.values():
-            m_keywords = ' '.join(m.make_set())
+            m_words = m.make_set()
+
+            # remove exluded words from being considered in memory matching
+            m_words.difference_update(self.excluded_words)
+
+            m_keywords = ' '.join(m_words)
             m.search_score = fuzz.token_sort_ratio(m_keywords, user_set)
 
         return [*sorted(self.memories.items(), key=lambda x: x[1])]

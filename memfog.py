@@ -21,13 +21,22 @@ from docopt import docopt
 from src import io, data, brain
 
 def main(argv):
-    root_path = os.path.dirname(os.path.realpath(__file__))
-    brain_file = '{}/brain.pkl'.format(root_path)
+    repo_root = os.path.dirname(os.path.realpath(__file__))
+    brain_file = repo_root + '/src/brain.pkl'
+    exclusion_file = repo_root + '/src/excluded_words.txt'
+
     brain_obj = io.pkl_from_file(brain_file)
 
     if not brain_obj:
+        print('Creating new brain object')
         brain_obj = brain.Brain()
         brain_obj.altered = True
+
+    if not os.path.isfile(exclusion_file):
+        io.mkfile(exclusion_file)
+
+    # reload exclusion words for each execution in case changes have been made
+    brain_obj.excluded_words = io.set_from_file(exclusion_file)
 
     top_n = argv['--top']
     if top_n:
