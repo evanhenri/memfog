@@ -56,6 +56,8 @@ class Brain:
         self.altered = False
         self.top_n = 10
 
+        self.excluded_words = set()
+
     def backup_memories(self, dir_path):
         if not dir_path:
             dir_path = os.getcwd()
@@ -289,9 +291,9 @@ def main(argv):
     elif argv['--edit']:
         brain.edit_memory(user_keywords)
     elif argv['--backup']:
-        brain.backup_memories(argv['<path>'])
+        brain.backup_memories(argv['<dir_path>'])
     elif argv['--import']:
-        brain.import_memories(argv['<path>'])
+        brain.import_memories(argv['<file_path>'])
     elif len(brain.memories) > 0:
         brain.display_memory(user_keywords)
     else:
