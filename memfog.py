@@ -1,17 +1,18 @@
 """
 
 Usage: memfog [--add|--remove|--edit] [<keyword>...] [--top <n>]
-       memfog [--backup <p>] [--import <p>]
+       memfog [--backup <dir_path>]
+       memfog [(--import <file_path>)]
 
 Options:
-  -h --help        Show this screen
-  -v --version     Show version
-  -a --add         Create new memory record
-  -r --remove      List records containing keywords and remove selected
-  -e --edit        List records containing keywords and edit details of selected
-  -t --top <n>     Limit results to top n memories
-  -b --backup <p>  Backup memories as json file to directory at path p
-  -i --import <p>  Load memories from json at path p
+  -h --help     Show this screen
+  -v --version  Show version
+  -a --add      Create new memory record
+  -r --remove   List records containing keywords and remove selected
+  -e --edit     List records containing keywords and edit details of selected
+  -t --top <n>  Limit results to top n memories [default: 10]
+  -b --backup   Backup memory records to json file
+  -i --import   Load memories from json file
 
 """
 import datetime
@@ -53,11 +54,13 @@ class Brain:
 
         # flag used to determine if brain.pkl must be re-written
         self.altered = False
-        self.top_n = 0
+        self.top_n = 10
 
     def backup_memories(self, dir_path):
-        if not os.path.exists(dir_path):
-            print('{} does not exist, saving backup to {}'.format(dir_path, os.getcwd()))
+        if not dir_path:
+            dir_path = os.getcwd()
+        elif not os.path.exists(dir_path):
+            print('{} does not exist'.format(dir_path))
             dir_path = os.getcwd()
 
         if dir_path[-1] != '/':
@@ -248,7 +251,6 @@ class Memory:
                 break
 
     def make_set(self):
-        #m_data = ' '.join([self.title, self.keywords, self.body])
         m_data = ' '.join([self.title, self.keywords])
         return set(standardize(m_data))
 
@@ -271,7 +273,6 @@ def main(argv):
 
     top_n = argv['--top']
     if top_n:
-        top_n = top_n[0]
         if is_valid_input(top_n):
             brain.top_n = int(top_n)
         else:
@@ -288,9 +289,9 @@ def main(argv):
     elif argv['--edit']:
         brain.edit_memory(user_keywords)
     elif argv['--backup']:
-        brain.backup_memories(argv['--backup'])
+        brain.backup_memories(argv['<path>'])
     elif argv['--import']:
-        brain.import_memories(argv['--import'])
+        brain.import_memories(argv['<path>'])
     elif len(brain.memories) > 0:
         brain.display_memory(user_keywords)
     else:
