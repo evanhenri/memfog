@@ -31,10 +31,6 @@ def main(argv):
     Brain = brain.Brain(mem_path)
     Brain.excluded_words = io.set_from_file(exclusion_file)
 
-    for m in Brain.memories:
-        print(m)
-    exit()
-
     top_n = argv['--top']
     if top_n:
         if data.is_valid_input(top_n):
@@ -62,5 +58,5 @@ def main(argv):
         print('No memories exist')
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.1.0')
+    args = docopt(__doc__, version='memfog v1.2.1')
     main(args)
