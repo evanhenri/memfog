@@ -1,10 +1,22 @@
 import readline
 
+from . import data
+
 def confirm(msg=''):
     """
+    :type msg: str
     :rtype: bool
     """
     return input('Confirm {} - y/n?\n> '.format(msg)).lower() == 'y'
+
+def get_input():
+    """
+    :rtype: int or None
+    """
+    entry = input('> ')
+    if data.is_valid_input(entry):
+        return int(entry)
+    return None
 
 def prefilled_input(prompt, prefill=''):
     """

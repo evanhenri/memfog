@@ -1,6 +1,29 @@
-import pickle
 import json
-import os
+import sqlite3
+
+class DB:
+    def __init__(self, file_path):
+        self.filename = file_path
+        self.connection = sqlite3.connect(file_path)
+        self.cursor = self.connection.cursor()
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS records
+                                (key INTEGER, title TEXT, keywords TEXT, body TEXT, PRIMARY KEY (key))""")
+    def dump(self):
+        sql = """SELECT * FROM records"""
+        self.cursor.execute(sql)
+        return self.cursor.fetchall()
+    def insert(self, title, keys, body):
+        sql = """INSERT INTO records(title, keywords, body) VALUES('{}','{}','{}')""".format(title, keys, body)
+        self.cursor.execute(sql)
+        self.connection.commit()
+    def update(self, key, column, content):
+        sql = """UPDATE records SET {}='{}' WHERE key={}""".format(column, content, key)
+        self.cursor.execute(sql)
+        self.connection.commit()
+    def remove(self, key):
+        sql = """DELETE FROM records WHERE key={}""".format(key)
+        self.cursor.execute(sql)
+        self.connection.commit()
 
 def json_from_file(file_path):
     """
@@ -33,32 +56,6 @@ def mkfile(file_path):
     except Exception as e:
         print('Error occured while making file {}\n{}'.format(file_path, e.args))
 
-def pkl_from_file(file_path):
-    """
-    :type file_path: str
-    """
-    try:
-        with open(file_path, 'rb') as in_stream:
-            if os.path.getsize(file_path) > 0:
-                print('loaded from' + file_path)
-                return pickle.load(in_stream)
-    except FileNotFoundError:
-        print('{0} not found'.format(file_path))
-    except Exception as e:
-        print('Error occured while reading {} as pkl\n{}'.format(file_path, e.args))
-
-def pkl_to_file(file_path, payload):
-    """
-    :type file_path: str
-    :type payload: Brain
-    """
-    try:
-        with open(file_path, 'wb') as out_stream:
-            pickle.dump(payload, out_stream, pickle.HIGHEST_PROTOCOL)
-        print('Saved {}'.format(file_path))
-    except Exception as e:
-        print('Error occured while writing pkl to {}\n{}'.format(file_path, e.args))
-
 def set_from_file(file_path):
     """
     :type file_path: str
@@ -69,39 +66,3 @@ def set_from_file(file_path):
             return set([line.strip() for line in f.readlines()])
     except Exception as e:
         print('Error occured while reading {} as set\n{}'.format(file_path, e.args))
-
-def seq_to_file(file_path, payload, delim='\n'):
-    """
-    :type file_path: str
-    :type payload: str
-    :type delim: str
-    """
-    delim_payload = delim.join(payload)
-    try:
-        with open(file_path, 'w') as f:
-            f.writelines(delim_payload)
-    except Exception as e:
-        print('Error occured while writing sequence to {}\n{}'.format(file_path, e.args))
-
-def str_from_file(file_path):
-    """
-    :type file_path: str
-    :returns: contents of file at file_path as str
-    """
-    try:
-        with open(file_path, 'r') as f:
-            return f.read()
-    except Exception as e:
-        print('Error occured while reading {} as string\n{}'.format(file_path, e.args))
-
-def str_to_file(file_path, payload):
-    """
-    :type file_path: str
-    :type payload: str
-    """
-    try:
-        with open(file_path, 'w') as f:
-            f.write(payload)
-        print('Export to {} successfull'.format(file_path))
-    except Exception as e:
-        print('Error occured while writing string to {}\n{}'.format(file_path, e.args))

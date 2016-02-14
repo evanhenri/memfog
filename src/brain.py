@@ -2,21 +2,22 @@ from fuzzywuzzy import fuzz
 import datetime
 import os
 
-from . import io, user, data, memory
+from . import io, user, data
+from .memory import Memory as Memory
 
 class Brain:
-    def __init__(self):
-        self.memory_keys = {1}
-        self.memories = {}
-
-        # flag used to determine if brain.pkl must be re-written
-        self.altered = False
+    def __init__(self, mem_db_path):
+        self.mem_db = io.DB(mem_db_path)
+        self.memories = [Memory(key,t,k,b) for key,t,k,b in self.mem_db.dump()]
         self.top_n = 10
 
         # words to omit from fuzzy string search, e.g. and the is are etc.
         self.excluded_words = set()
 
     def backup_memories(self, dir_path):
+        """
+        :type dir_path: str
+        """
         if not dir_path:
             dir_path = os.getcwd()
         elif not os.path.exists(dir_path):
@@ -33,34 +34,25 @@ class Brain:
             if not user.confirm('overwrite of existing file {}'.format(dir_path)):
                 return
 
-        m_json = [m.get_backup() for m in self.memories.values()]
+        m_json = [Mem.get_backup() for Mem in self.memories]
         io.json_to_file(dir_path, m_json)
 
     def create_memory(self, user_title=None):
         """
         :type user_title: str or None
         """
-        m = memory.Memory()
-
-        # prevent spewing of exception if ^c used to cancel adding a memory
+        Mem = Memory()
         try:
             # if user provided a title in cli args, set memory title using that entry
-            if user_title:
-                m.title = user_title
-            # otherwise prompt them for a title entry
-            else:
-                m.update_title()
+            if user_title: Mem.title = user_title
+            else: Mem.update_title()
+            Mem.update_keywords()
+            Mem.update_body()
 
-            m.update_keywords()
-            m.update_body()
         except KeyboardInterrupt:
             print('\nDiscarded new memory data')
             return
-
-        self.memories.setdefault(self._get_memory_key(), m)
-        self.altered = True
-
-        print('Added \'{}\''.format(m.title))
+        self.mem_db.insert(Mem.title, Mem.keywords, Mem.body)
 
     def display_memory(self, user_keywords):
         """
@@ -68,9 +60,9 @@ class Brain:
         """
         m_matches = self._memory_match(user_keywords)
         while True:
-            m_key = self._select_memory_from_list(m_matches, 'Display')
-            if m_key:
-                print('{}\n\t{}'.format(self.memories[m_key].title, self.memories[m_key].body))
+            Mem = self._select_memory_from_list(m_matches, 'Display')
+            if Mem:
+                print('{}\n\t{}'.format(Mem.title, Mem.body))
                 input('...')
             else:
                 break
@@ -81,80 +73,62 @@ class Brain:
         """
         m_matches = self._memory_match(user_keywords)
         while True:
-            m_key = self._select_memory_from_list(m_matches, 'Edit')
-            if m_key:
-                self.memories[m_key].edit_menu()
-                self.altered = True
+            Mem = self._select_memory_from_list(m_matches, 'Edit')
+            if Mem:
+                print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
+                selection = user.get_input()
 
-                print('Edited \'{}\''.format(self.memories[m_key].title))
+                if selection:
+                    options = { 1:Mem.update_title, 2:Mem.update_keywords, 3:Mem.update_body }
+                    attr = { 1:'title', 2:'keywords', 3:'body' }
+
+                    if selection not in options:
+                        break
+                    else:
+                        # call memory method to change its value
+                        options[selection]()
+
+                        # update changed attribute of Mem in db
+                        self.mem_db.update(Mem.db_key, attr[selection], eval('Mem.{}'.format(attr[selection])))
             else:
                 break
-
-    def _get_memory_key(self):
-        """
-        :rtype: int
-        :returns: smallest key from self.memory_keys
-        """
-        # use minimum of available memory keys so keys are consecutive
-        next_key = min(self.memory_keys)
-        self.memory_keys.remove(next_key)
-        if len(self.memory_keys) == 0:
-            self.memory_keys.add(next_key + 1)
-        return next_key
 
     def import_memories(self, file_path):
         """
         :type file_path: str
         """
         json_memories = io.json_from_file(file_path)
-
-        for json_m in json_memories:
-            m = memory.Memory()
-            m.title = json_m['title']
-            m.keywords = json_m['keywords']
-            m.body = json_m['body']
-            self.memories.setdefault(self._get_memory_key(), m)
-        self.altered = True
-
+        [self.mem_db.insert(mem['title'], mem['keywords'], mem['body']) for mem in json_memories]
         print('Imported {} memories'.format(len(json_memories)))
 
     def _memory_match(self, user_keywords):
         """
         :type user_keywords: str
-        :returns: self.memories dict sorted by memory_obj.search_score in ascending order
+        :returns: top_n Memories in self.memories list sorted by Memory.search_score in ascending order
         """
         user_set = ''.join(set(data.standardize(user_keywords)))
 
-        for m in self.memories.values():
-            m_words = m.make_set()
+        for Mem in self.memories:
+            m_words = Mem.make_set()
 
             # remove exluded words from being considered in memory matching
             m_words.difference_update(self.excluded_words)
 
             m_keywords = ' '.join(m_words)
-            m.search_score = fuzz.token_sort_ratio(m_keywords, user_set)
-
-        return [*sorted(self.memories.items(), key=lambda x: x[1])]
+            Mem.search_score = fuzz.token_sort_ratio(m_keywords, user_set)
+        return [*sorted(self.memories)][-self.top_n::]
 
     def remove_memory(self, user_keywords):
         """
         :type user_keywords: str
         """
         m_matches = self._memory_match(user_keywords)
-
         while True:
-            m_key = self._select_memory_from_list(m_matches, 'Remove')
-            if m_key:
-                # reclaim key of deleted memory so it can be reused
-                self.memory_keys.add(m_key)
-
-                m = self.memories.pop(m_key)
-
-                # remove from m_matches so deleted memory not shown in memory selection memnu
-                m_matches.remove((m_key, m))
-                self.altered = True
-
-                print('Removed \'{}\''.format(m.title))
+            Mem = self._select_memory_from_list(m_matches, 'Remove')
+            if Mem:
+                self.mem_db.remove(Mem.db_key)
+                self.memories.remove(Mem)
+                m_matches.remove(Mem)
             else:
                 break
 
@@ -162,22 +136,21 @@ class Brain:
         """
         :type m_matches: list
         :type action_description: str
-        :returns: m_id int of selected memory or 0
+        :returns: Memory object or None
         """
         if len(self.memories) > 0:
             print('{} which memory?'.format(action_description))
 
-            for m_key,m in m_matches[-self.top_n::]:
-                print('{}) [{}%] {}'.format(m_key, m.search_score, m.title))
+            for i,Mem in enumerate(m_matches):
+                print('{}) [{}%] {}'.format(i, Mem.search_score, Mem.title))
 
-            selection = input('> ')
+            selection = user.get_input()
 
-            if data.is_valid_input(selection):
-                selection = int(selection)
-                if selection in self.memories:
-                    return selection
+            if selection:
+                if selection < len(self.memories):
+                    return m_matches[selection]
                 else:
                     print('Invalid memory selection \'{}\''.format(selection))
         else:
             print('No memories exist')
-        return 0
+        return None

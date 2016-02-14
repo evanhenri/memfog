@@ -1,39 +1,24 @@
 from . import data, user
 
 class Memory:
-    def __init__(self):
-        self.title = ''
-        self.keywords = ''
-        self.body = ''
+    def __init__(self, db_key=None, title='', keywords='', body=''):
+        self.db_key = db_key
+        self.title = title
+        self.keywords = keywords
+        self.body = body
         self.search_score = 0
 
     def __gt__(self, other_memory):
         return self.search_score > other_memory.search_score
 
+    def __repr__(self):
+        return 'Memory {}: {}'.format(self.db_key, self.title)
+
     def get_backup(self):
         return {k:v for k,v in self.__dict__.items() if k != 'search_score'}
 
-    def edit_menu(self):
-        while True:
-            print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
-            selection = input('> ')
-
-            if data.is_valid_input(selection):
-                selection = int(selection)
-                options = {
-                    1:self.update_title,
-                    2:self.update_keywords,
-                    3:self.update_body,
-                }
-
-                if selection not in options:
-                    break
-                else:
-                    options[selection]()
-            else:
-                break
-
     def make_set(self):
+        # body text is not include in string match
         m_data = ' '.join([self.title, self.keywords])
         return set(data.standardize(m_data))
 

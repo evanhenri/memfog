@@ -22,26 +22,23 @@ from src import io, data, brain
 
 def main(argv):
     repo_root = os.path.dirname(os.path.realpath(__file__))
-    brain_file = repo_root + '/src/brain.pkl'
+    mem_file = 'memories.db'
+    mem_path = repo_root + '/' + mem_file
     exclusion_file = repo_root + '/src/excluded_words.txt'
 
-    brain_obj = io.pkl_from_file(brain_file)
+    if not os.path.isfile(exclusion_file): io.mkfile(exclusion_file)
 
-    if not brain_obj:
-        print('Creating new brain object')
-        brain_obj = brain.Brain()
-        brain_obj.altered = True
+    Brain = brain.Brain(mem_path)
+    Brain.excluded_words = io.set_from_file(exclusion_file)
 
-    if not os.path.isfile(exclusion_file):
-        io.mkfile(exclusion_file)
-
-    # reload exclusion words for each execution in case changes have been made
-    brain_obj.excluded_words = io.set_from_file(exclusion_file)
+    for m in Brain.memories:
+        print(m)
+    exit()
 
     top_n = argv['--top']
     if top_n:
         if data.is_valid_input(top_n):
-            brain_obj.top_n = int(top_n)
+            Brain.top_n = int(top_n)
         else:
             print('Invalid threshold value \'{}\''.format(top_n))
 
@@ -50,23 +47,19 @@ def main(argv):
 
     if argv['--add']:
         # assumed that keywords entered are the memory title for the new memory being added
-        brain_obj.create_memory(user_keywords)
+        Brain.create_memory(user_keywords)
     elif argv['--remove']:
-        brain_obj.remove_memory(user_keywords)
+        Brain.remove_memory(user_keywords)
     elif argv['--edit']:
-        brain_obj.edit_memory(user_keywords)
+        Brain.edit_memory(user_keywords)
     elif argv['--backup']:
-        brain_obj.backup_memories(argv['<dir_path>'])
+        Brain.backup_memories(argv['<dir_path>'])
     elif argv['--import']:
-        brain_obj.import_memories(argv['<file_path>'])
-    elif len(brain_obj.memories) > 0:
-        brain_obj.display_memory(user_keywords)
+        Brain.import_memories(argv['<file_path>'])
+    elif len(Brain.memories) > 0:
+        Brain.display_memory(user_keywords)
     else:
         print('No memories exist')
-
-    if brain_obj.altered:
-        brain_obj.altered = False
-        io.pkl_to_file(brain_file, brain_obj)
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='memfog v1.1.0')
