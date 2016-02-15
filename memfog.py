@@ -24,7 +24,7 @@ def main(argv):
     repo_root = os.path.dirname(os.path.realpath(__file__))
     mem_file = 'memories.db'
     mem_path = repo_root + '/' + mem_file
-    exclusion_file = repo_root + '/src/excluded_words.txt'
+    exclusion_file = repo_root + '/excluded_words.txt'
 
     if not os.path.isfile(exclusion_file): io.mkfile(exclusion_file)
 
