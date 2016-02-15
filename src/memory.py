@@ -1,3 +1,6 @@
+import npyscreen as np
+import textwrap, os
+
 from . import data, user
 
 class Memory:
@@ -30,3 +33,31 @@ class Memory:
 
     def update_body(self):
         self.body = user.prefilled_input('Body: ', self.body)
+
+class UI:
+    class BoxedMultiLineEdit(np.BoxTitle):
+        _contained_widget = np.MultiLineEdit
+
+    def __init__(self, title='', keywords='', body=''):
+        self.title_text = title
+        self.keywords_text = keywords
+        self.body_text = body
+
+        np.wrapper_basic(self._run)
+
+    def _run(self, *args):
+        rows, columns = os.popen('stty size', 'r').read().split()
+        columns = int(columns)
+
+        F = np.Form()
+        title = F.add(np.TitleText, name='Title:', value=self.title_text)
+        keywords = F.add(np.TitleText, name='Keywords:', value=self.keywords_text)
+        body = F.add(self.BoxedMultiLineEdit, name='Body', value=textwrap.fill(self.body_text, columns-10))
+        body.entry_widget.scroll_exit = True
+
+        F.edit()
+
+        # update UI member variables in case they have been changed by the user
+        self.title_text = title.value
+        self.keywords_text = keywords.value
+        self.body_text = body.value

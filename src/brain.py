@@ -3,12 +3,12 @@ import datetime
 import os
 
 from . import io, user, data
-from .memory import Memory as Memory
+from . import memory
 
 class Brain:
     def __init__(self, mem_db_path):
         self.mem_db = io.DB(mem_db_path)
-        self.memories = [Memory(key,t,k,b) for key,t,k,b in self.mem_db.dump()]
+        self.memories = [memory.Memory(key,t,k,b) for key,t,k,b in self.mem_db.dump()]
         self.top_n = 10
 
         # words to omit from fuzzy string search, e.g. and the is are etc.
@@ -41,7 +41,7 @@ class Brain:
         """
         :type user_title: str or None
         """
-        Mem = Memory()
+        Mem = memory.Memory()
         try:
             # if user provided a title in cli args, set memory title using that entry
             if user_title: Mem.title = user_title
@@ -62,8 +62,7 @@ class Brain:
         while True:
             Mem = self._select_memory_from_list(m_matches, 'Display')
             if Mem:
-                print('{}\n\t{}'.format(Mem.title, Mem.body))
-                input('...')
+                mem_ui = memory.UI(Mem.title, Mem.keywords, Mem.body)
             else:
                 break
 
@@ -146,7 +145,7 @@ class Brain:
 
             selection = user.get_input()
 
-            if selection:
+            if selection is not None:
                 if selection < len(self.memories):
                     return m_matches[selection]
                 else:
