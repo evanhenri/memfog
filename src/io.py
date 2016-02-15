@@ -16,8 +16,8 @@ class DB:
         sql = """INSERT INTO records(title, keywords, body) VALUES('{}','{}','{}')""".format(title, keys, body)
         self.cursor.execute(sql)
         self.connection.commit()
-    def update(self, key, column, content):
-        sql = """UPDATE records SET {}='{}' WHERE key={}""".format(column, content, key)
+    def update(self, title, keywords, body, key):
+        sql = """UPDATE records SET title='{}', keywords='{}', body='{}' WHERE key={}""".format(title, keywords, body, key)
         self.cursor.execute(sql)
         self.connection.commit()
     def remove(self, key):

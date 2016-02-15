@@ -63,32 +63,8 @@ class Brain:
             Mem = self._select_memory_from_list(m_matches, 'Display')
             if Mem:
                 mem_ui = memory.UI(Mem.title, Mem.keywords, Mem.body)
-            else:
-                break
-
-    def edit_memory(self, user_keywords):
-        """
-        :type user_keywords: str
-        """
-        m_matches = self._memory_match(user_keywords)
-        while True:
-            Mem = self._select_memory_from_list(m_matches, 'Edit')
-            if Mem:
-                print('1) Edit Title\n2) Edit Keywords\n3) Edit Body')
-                selection = user.get_input()
-
-                if selection:
-                    options = { 1:Mem.update_title, 2:Mem.update_keywords, 3:Mem.update_body }
-                    attr = { 1:'title', 2:'keywords', 3:'body' }
-
-                    if selection not in options:
-                        break
-                    else:
-                        # call memory method to change its value
-                        options[selection]()
-
-                        # update changed attribute of Mem in db
-                        self.mem_db.update(Mem.db_key, attr[selection], eval('Mem.{}'.format(attr[selection])))
+                if any([mem_ui.title_text != Mem.title, mem_ui.keywords_text != Mem.keywords, mem_ui.body_text != Mem.body]):
+                    self.mem_db.update(mem_ui.title_text, mem_ui.keywords_text, mem_ui.body_text, Mem.db_key)
             else:
                 break
 

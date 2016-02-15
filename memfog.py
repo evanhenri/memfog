@@ -1,6 +1,6 @@
 """
 
-Usage: memfog [--add|--remove|--edit] [<keyword>...] [--top <n>]
+Usage: memfog [--add|--remove] [<keyword>...] [--top <n>]
        memfog [--backup <dir_path>]
        memfog [(--import <file_path>)]
 
@@ -9,7 +9,6 @@ Options:
   -v --version  Show version
   -a --add      Create new memory record
   -r --remove   List records containing keywords and remove selected
-  -e --edit     List records containing keywords and edit details of selected
   -t --top <n>  Limit results to top n memories [default: 10]
   -b --backup   Backup memory records to json file
   -i --import   Load memories from json file
@@ -46,8 +45,6 @@ def main(argv):
         Brain.create_memory(user_keywords)
     elif argv['--remove']:
         Brain.remove_memory(user_keywords)
-    elif argv['--edit']:
-        Brain.edit_memory(user_keywords)
     elif argv['--backup']:
         Brain.backup_memories(argv['<dir_path>'])
     elif argv['--import']:
