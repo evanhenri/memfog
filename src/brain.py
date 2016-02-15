@@ -63,8 +63,7 @@ class Brain:
             Mem = self._select_memory_from_list(m_matches, 'Display')
             if Mem:
                 mem_ui = memory.UI(Mem.title, Mem.keywords, Mem.body)
-                if any([mem_ui.title_text != Mem.title, mem_ui.keywords_text != Mem.keywords, mem_ui.body_text != Mem.body]):
-                    self.mem_db.update(mem_ui.title_text, mem_ui.keywords_text, mem_ui.body_text, Mem.db_key)
+                self.mem_db.update(Mem, mem_ui)
             else:
                 break
 
