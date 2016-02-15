@@ -1,5 +1,4 @@
 import npyscreen as np
-import textwrap, os
 
 from . import data, user
 
@@ -46,13 +45,10 @@ class UI:
         np.wrapper_basic(self._run)
 
     def _run(self, *args):
-        rows, columns = os.popen('stty size', 'r').read().split()
-        columns = int(columns)
-
         F = np.Form()
         title = F.add(np.TitleText, name='Title:', value=self.title_text)
         keywords = F.add(np.TitleText, name='Keywords:', value=self.keywords_text)
-        body = F.add(self.BoxedMultiLineEdit, name='Body', value=textwrap.fill(self.body_text, columns-10))
+        body = F.add(self.BoxedMultiLineEdit, name='Body', value=self.body_text)
         body.entry_widget.scroll_exit = True
 
         F.edit()
