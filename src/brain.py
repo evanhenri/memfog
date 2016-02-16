@@ -2,13 +2,13 @@ from fuzzywuzzy import fuzz
 import datetime
 import os
 
-from . import io, user, data
-from . import memory
+from . import io, user, data, memory, ui
 
 class Brain:
     def __init__(self, mem_db_path):
         self.mem_db = io.DB(mem_db_path)
         self.memories = [memory.Memory(key,t,k,b) for key,t,k,b in self.mem_db.dump()]
+
         self.top_n = 10
 
         # words to omit from fuzzy string search, e.g. and the is are etc.
@@ -40,7 +40,7 @@ class Brain:
     def create_memory(self):
         try:
             # display UI so user can fill in memory data
-            mem_ui = memory.UI()
+            mem_ui = ui.MemDisplay()
             self.mem_db.insert(mem_ui.title_text, mem_ui.keywords_text, mem_ui.body_text)
         except KeyboardInterrupt:
             print('Discarded new memory data')
@@ -54,7 +54,7 @@ class Brain:
         while True:
             Mem = self._select_memory_from_list(m_matches, 'Display')
             if Mem:
-                mem_ui = memory.UI(Mem.title, Mem.keywords, Mem.body)
+                mem_ui = ui.MemDisplay(Mem.title, Mem.keywords, Mem.body)
                 self.mem_db.update(Mem, mem_ui)
             else:
                 break
