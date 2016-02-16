@@ -37,22 +37,14 @@ class Brain:
         m_json = [Mem.get_backup() for Mem in self.memories]
         io.json_to_file(dir_path, m_json)
 
-    def create_memory(self, user_title=None):
-        """
-        :type user_title: str or None
-        """
-        Mem = memory.Memory()
+    def create_memory(self):
         try:
-            # if user provided a title in cli args, set memory title using that entry
-            if user_title: Mem.title = user_title
-            else: Mem.update_title()
-            Mem.update_keywords()
-            Mem.update_body()
-
+            # display UI so user can fill in memory data
+            mem_ui = memory.UI()
+            self.mem_db.insert(mem_ui.title_text, mem_ui.keywords_text, mem_ui.body_text)
         except KeyboardInterrupt:
-            print('\nDiscarded new memory data')
+            print('Discarded new memory data')
             return
-        self.mem_db.insert(Mem.title, Mem.keywords, Mem.body)
 
     def display_memory(self, user_keywords):
         """
