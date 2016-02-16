@@ -1,6 +1,7 @@
 """
 
-Usage: memfog [--add|--remove] [<keyword>...] [--top <n>]
+Usage: memfog [--add]
+       memfog [--remove <keyword>...] [--top <n>]
        memfog [--backup <dir_path>]
        memfog [(--import <file_path>)]
 
@@ -41,8 +42,7 @@ def main(argv):
     user_keywords = ' '.join(argv['<keyword>'])
 
     if argv['--add']:
-        # assumed that keywords entered are the memory title for the new memory being added
-        Brain.create_memory(user_keywords)
+        Brain.create_memory()
     elif argv['--remove']:
         Brain.remove_memory(user_keywords)
     elif argv['--backup']:
