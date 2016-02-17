@@ -19,7 +19,7 @@ class DB:
         """
         :type mem_obj: memory.Memory
         :type mem_ui: memory.UI
-        Updates any changes made to mem_obj using single SQL statement
+        Updates to database on done if mem_obj has different values compared to mem_ui
         """
         sql = 'UPDATE records SET'
         if mem_obj.title != mem_ui.title_text:
