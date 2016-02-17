@@ -1,4 +1,6 @@
-from . import data, user
+import npyscreen as np
+
+from . import data
 
 class Memory:
     def __init__(self, db_key=None, title='', keywords='', body=''):
@@ -22,11 +24,28 @@ class Memory:
         m_data = ' '.join([self.title, self.keywords])
         return set(data.standardize(m_data))
 
-    def update_title(self):
-        self.title = user.prefilled_input('Title: ', self.title)
+class UI:
+    class BoxedMultiLineEdit(np.BoxTitle):
+        _contained_widget = np.MultiLineEdit
 
-    def update_keywords(self):
-        self.keywords = user.prefilled_input('Keywords: ', self.keywords)
+    def __init__(self, title='', keywords='', body=''):
+        self.title_text = title
+        self.keywords_text = keywords
+        self.body_text = body
 
-    def update_body(self):
-        self.body = user.prefilled_input('Body: ', self.body)
+        np.wrapper_basic(self._run)
+
+    def _run(self, *args):
+        F = np.Form()
+        title = F.add(np.TitleText, name='Title:', value=self.title_text)
+        keywords = F.add(np.TitleText, name='Keywords:', value=self.keywords_text)
+        body = F.add(self.BoxedMultiLineEdit, name='Body', value=self.body_text)
+        body.entry_widget.scroll_exit = True
+
+        F.edit()
+
+        # update UI member variables in case they have been changed by the user
+        self.title_text = title.value
+        self.keywords_text = keywords.value
+        self.body_text = body.value
+
