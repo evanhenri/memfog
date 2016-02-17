@@ -2,7 +2,7 @@
 
 Usage: memfog [--add]
        memfog [--remove <keyword>...] [--top <n>]
-       memfog [--backup <dir_path>]
+       memfog [--export <dir_path>]
        memfog [(--import <file_path>)]
 
 Options:
@@ -11,7 +11,7 @@ Options:
   -a --add      Create new memory record
   -r --remove   List records containing keywords and remove selected
   -t --top <n>  Limit results to top n memories [default: 10]
-  -b --backup   Backup memory records to json file
+  -b --export   Export memory records to json file
   -i --import   Load memories from json file
 
 """
@@ -45,7 +45,7 @@ def main(argv):
         Brain.create_memory()
     elif argv['--remove']:
         Brain.remove_memory(user_keywords)
-    elif argv['--backup']:
+    elif argv['--export']:
         Brain.backup_memories(argv['<dir_path>'])
     elif argv['--import']:
         Brain.import_memories(argv['<file_path>'])
@@ -55,5 +55,5 @@ def main(argv):
         print('No memories exist')
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.2.1')
+    args = docopt(__doc__, version='memfog v1.3.0')
     main(args)
