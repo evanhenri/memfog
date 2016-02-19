@@ -1,4 +1,4 @@
 .idea/
-brain.pkl
+datadir/
 test.py
 *.pyc
