@@ -11,7 +11,7 @@ Options:
   -a --add      Create new memory record
   -r --remove   List records containing keywords and remove selected
   -t --top <n>  Limit results to top n memories [default: 10]
-  -b --export   Export memory records to json file
+  -e --export   Export memory records to json file
   -i --import   Load memories from json file
 
 """
@@ -55,5 +55,5 @@ def main(argv):
         print('No memories exist')
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.3.0')
+    args = docopt(__doc__, version='memfog v1.3.1')
     main(args)
