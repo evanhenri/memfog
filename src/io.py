@@ -1,3 +1,4 @@
+import os
 import json
 import sqlite3
 
@@ -43,44 +44,54 @@ class DB:
         self.cursor.execute(sql)
         self.connection.commit()
 
-def json_from_file(file_path):
+def file_exists(filepath):
+    if os.path.isfile(filepath):
+        return True
+    print('Invalid file path {}'.format(filepath))
+    return False
+
+def json_from_file(filepath):
     """
-    :type file_path: str
+    :type filepath: str
     """
     try:
-        with open(file_path, 'r') as f:
-            return json.load(f)
+        if file_exists(filepath):
+            with open(filepath, 'r') as f:
+                return json.load(f)
+        return dict()
     except Exception as e:
-        print('Error occured while reading {} as json\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as json\n{}'.format(filepath, e.args))
 
-def json_to_file(file_path, payload):
+def json_to_file(filepath, payload):
     """
-    :type file_path: str
+    :type filepath: str
     :type payload: json encodable obj
     """
     try:
-        with open(file_path, 'w') as f:
+        with open(filepath, 'w') as f:
             json.dump(payload, f, indent=4)
-        print('Saved {}'.format(file_path))
+        print('Saved {}'.format(filepath))
     except Exception as e:
-        print('Error occured while writing json to {}\n{}'.format(file_path, e.args))
+        print('Error occured while writing json to {}\n{}'.format(filepath, e.args))
 
-def mkfile(file_path):
+def mkfile(filepath):
     """
-    :type file_path: str
+    :type filepath: str
     """
     try:
-        open(file_path, 'w').close()
+        open(filepath, 'w').close()
     except Exception as e:
-        print('Error occured while making file {}\n{}'.format(file_path, e.args))
+        print('Error occured while making file {}\n{}'.format(filepath, e.args))
 
-def set_from_file(file_path):
+def set_from_file(filepath):
     """
-    :type file_path: str
+    :type filepath: str
     :returns: contents of file at file_path where each line is an element in returned set
     """
     try:
-        with open(file_path, 'r') as f:
-            return set([line.strip() for line in f.readlines()])
+        if file_exists(filepath):
+            with open(filepath, 'r') as f:
+                return set([line.strip() for line in f.readlines()])
+        return set()
     except Exception as e:
-        print('Error occured while reading {} as set\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as set\n{}'.format(filepath, e.args))
