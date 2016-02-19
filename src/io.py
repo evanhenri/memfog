@@ -6,14 +6,16 @@ class DB:
         self.filename = file_path
         self.connection = sqlite3.connect(file_path)
         self.cursor = self.connection.cursor()
-        self.cursor.execute('CREATE TABLE IF NOT EXISTS records (key INTEGER, title TEXT, keywords TEXT, body TEXT, PRIMARY KEY (key))')
+        self.cursor.execute("""CREATE TABLE IF NOT EXISTS records
+                            (key INTEGER, title TEXT, keywords TEXT,
+                            body TEXT, PRIMARY KEY (key))""")
     def dump(self):
-        sql = 'SELECT * FROM records'
+        sql = """SELECT * FROM records"""
         self.cursor.execute(sql)
         return self.cursor.fetchall()
     def insert(self, title, keywords, body):
-        sql = 'INSERT INTO records(title, keywords, body) VALUES(\'{}\',\'{}\',\'{}\')'.format(title, keywords, body)
-        self.cursor.execute(sql)
+        sql = """INSERT INTO records(title, keywords, body) VALUES(?,?,?)"""
+        self.cursor.execute(sql, (title, keywords, body))
         self.connection.commit()
     def update(self, mem_obj, mem_ui):
         """
@@ -21,23 +23,23 @@ class DB:
         :type mem_ui: memory.UI
         Updates to database on done if mem_obj has different values compared to mem_ui
         """
-        sql = 'UPDATE records SET'
+        sql = """UPDATE records SET"""
         if mem_obj.title != mem_ui.title_text:
-            sql += ' title=\'{}\','.format(mem_ui.title_text)
+            sql += """ title="{}",""".format(mem_ui.title_text)
         if mem_obj.keywords != mem_ui.keywords_text:
-            sql += ' keywords=\'{}\','.format(mem_ui.keywords_text)
+            sql += """ keywords="{}",""".format(mem_ui.keywords_text)
         if mem_obj.body != mem_ui.body_text:
-            sql += ' body=\'{}\','.format(mem_ui.body_text)
+            sql += """ body="{}",""".format(mem_ui.body_text)
 
         # sql string will only change from default value if change has been detected
-        if sql != 'UPDATE records SET':
+        if sql != """UPDATE records SET""":
             if sql.endswith(','):
                 sql = sql.rsplit(',',1)[0]
-            sql += ' WHERE key={}'.format(mem_obj.db_key)
+            sql += """ WHERE key={}""".format(mem_obj.db_key)
             self.cursor.executescript(sql)
             self.connection.commit()
     def remove(self, key):
-        sql = 'DELETE FROM records WHERE key={}'.format(key)
+        sql = """DELETE FROM records WHERE key={}""".format(key)
         self.cursor.execute(sql)
         self.connection.commit()
 
