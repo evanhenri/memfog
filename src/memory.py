@@ -3,7 +3,7 @@ import npyscreen as np
 from . import data
 
 class Memory:
-    def __init__(self, db_key=None, title='', keywords='', body=''):
+    def __init__(self, db_key=0, title='', keywords='', body=''):
         self.db_key = db_key
         self.title = title
         self.keywords = keywords
@@ -24,28 +24,37 @@ class Memory:
         m_data = ' '.join([self.title, self.keywords])
         return set(data.standardize(m_data))
 
+    def diff(self, Mem_UI):
+        memory_changes = {}
+
+        if Mem_UI.title != self.title: memory_changes['title'] = Mem_UI.title
+        if Mem_UI.keywords != self.keywords: memory_changes['keywords'] = Mem_UI.keywords
+        if Mem_UI.body != self.body: memory_changes['body'] = Mem_UI.body
+
+        return memory_changes
+
+
 class UI:
     class BoxedMultiLineEdit(np.BoxTitle):
         _contained_widget = np.MultiLineEdit
 
-    def __init__(self, title='', keywords='', body=''):
-        self.title_text = title
-        self.keywords_text = keywords
-        self.body_text = body
-
+    def __init__(self, Mem):
+        self.title = Mem.title
+        self.keywords = Mem.keywords
+        self.body = Mem.body
         np.wrapper_basic(self._run)
 
     def _run(self, *args):
         F = np.Form()
-        title = F.add(np.TitleText, name='Title:', value=self.title_text)
-        keywords = F.add(np.TitleText, name='Keywords:', value=self.keywords_text)
-        body = F.add(self.BoxedMultiLineEdit, name='Body', value=self.body_text)
-        body.entry_widget.scroll_exit = True
+        title_widget = F.add(np.TitleText, name='Title:', value=self.title)
+        keywords_widget = F.add(np.TitleText, name='Keywords:', value=self.keywords)
+        body_widget = F.add(self.BoxedMultiLineEdit, name='Body', value=self.body)
+        body_widget.entry_widget.scroll_exit = True
 
         F.edit()
 
         # update UI member variables in case they have been changed by the user
-        self.title_text = title.value
-        self.keywords_text = keywords.value
-        self.body_text = body.value
+        self.title = title_widget.value
+        self.keywords = keywords_widget.value
+        self.body = body_widget.value
 

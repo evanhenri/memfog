@@ -5,13 +5,18 @@ import os
 from . import io, user, data, memory
 
 class Brain:
-    def __init__(self, mem_db_path):
-        self.mem_db = io.DB(mem_db_path)
-        self.memories = [memory.Memory(key,t,k,b) for key,t,k,b in self.mem_db.dump()]
-        self.top_n = 10
+    def __init__(self):
+        self.data_dir = 'datadir/'
+        self.body_dir = self.data_dir + 'body/'
 
-        # words to omit from fuzzy string search, e.g. and the is are etc.
-        self.excluded_words = set()
+        io.init_dir(self.data_dir)
+        io.init_dir(self.body_dir)
+        io.init_file(self.data_dir + 'exclusions.txt')
+
+        self.excluded_words = io.set_from_file(self.data_dir + 'exclusions.txt')
+        self.mem_db = io.DB(self.data_dir + 'memories.db')
+        self.memories = [memory.Memory(*record) for record in self.mem_db.dump()]
+        self.top_n = 10
 
     def backup_memories(self, dir_path):
         """
@@ -39,8 +44,13 @@ class Brain:
     def create_memory(self):
         try:
             # display UI so user can fill in memory data
-            mem_ui = memory.UI()
-            self.mem_db.insert(mem_ui.title_text, mem_ui.keywords_text, mem_ui.body_text)
+            Mem = memory.Memory()
+            Mem_UI = memory.UI(Mem)
+            Mem.__dict__.update(Mem_UI.__dict__)
+
+            db_key = self.mem_db.insert(Mem)
+            io.str_to_file(self.body_dir + str(db_key), Mem.body)
+
         except KeyboardInterrupt:
             print('Discarded new memory data')
             return
@@ -54,8 +64,20 @@ class Brain:
             Mem = self._select_memory_from_list(m_matches, 'Display')
             if Mem:
                 try:
-                    mem_ui = memory.UI(Mem.title, Mem.keywords, Mem.body)
-                    self.mem_db.update(Mem, mem_ui)
+                    Mem.body = io.str_from_file(self.body_dir + str(Mem.db_key))
+
+                    Mem_UI = memory.UI(Mem)
+                    changed_values = Mem.diff(Mem_UI)
+
+                    if 'body' in changed_values:
+                        io.str_to_file(self.body_dir + str(Mem.db_key), Mem_UI.body)
+
+                        # remove body so it is not present when dict is passed to mem_db.update_many
+                        changed_values.pop('body')
+
+                    if len(changed_values) > 0:
+                        self.mem_db.update_many(Mem.db_key, changed_values)
+
                 except KeyboardInterrupt:
                     pass
             else:
@@ -66,7 +88,13 @@ class Brain:
         :type file_path: str
         """
         json_memories = io.json_from_file(file_path)
-        [self.mem_db.insert(mem['title'], mem['keywords'], mem['body']) for mem in json_memories]
+
+        for record in json_memories:
+            Mem = memory.Memory()
+            Mem.__dict__.update(record)
+            db_key = self.mem_db.insert(Mem)
+            io.str_to_file(self.body_dir + str(db_key), Mem.body)
+
         print('Imported {} memories'.format(len(json_memories)))
 
     def _memory_match(self, user_keywords):
@@ -79,7 +107,7 @@ class Brain:
         for Mem in self.memories:
             m_words = Mem.make_set()
 
-            # remove exluded words from being considered in memory matching
+            # exluded words are not considered in memory matching
             m_words.difference_update(self.excluded_words)
 
             m_keywords = ' '.join(m_words)
@@ -94,7 +122,12 @@ class Brain:
         while True:
             Mem = self._select_memory_from_list(m_matches, 'Remove')
             if Mem and user.confirm('delete'):
+                # delete memory record in db
                 self.mem_db.remove(Mem.db_key)
+
+                # delete body file in datadir
+                io.delete_file(self.body_dir + str(Mem.db_key))
+
                 self.memories.remove(Mem)
                 m_matches.remove(Mem)
             else:

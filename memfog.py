@@ -15,21 +15,12 @@ Options:
   -i --import   Load memories from json file
 
 """
-import os
 from docopt import docopt
 
-from src import io, data, brain
+from src import data, brain
 
 def main(argv):
-    repo_root = os.path.dirname(os.path.realpath(__file__))
-    mem_file = 'memories.db'
-    mem_path = repo_root + '/' + mem_file
-    exclusion_file = repo_root + '/excluded_words.txt'
-
-    if not os.path.isfile(exclusion_file): io.mkfile(exclusion_file)
-
-    Brain = brain.Brain(mem_path)
-    Brain.excluded_words = io.set_from_file(exclusion_file)
+    Brain = brain.Brain()
 
     top_n = argv['--top']
     if top_n:
@@ -55,5 +46,5 @@ def main(argv):
         print('No memories exist')
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.3.1')
+    args = docopt(__doc__, version='memfog v1.4.0')
     main(args)
