@@ -30,18 +30,18 @@ def main(argv):
             print('Invalid threshold value \'{}\''.format(top_n))
 
     # delimit words with whitespace so they can be processed at same time as memory string data
-    user_keywords = ' '.join(argv['<keyword>'])
+    user_input = ' '.join(argv['<keyword>'])
 
     if argv['--add']:
-        Brain.create_memory()
+        Brain.create_mem()
     elif argv['--remove']:
-        Brain.remove_memory(user_keywords)
+        Brain.remove_mem(user_input)
     elif argv['--export']:
-        Brain.backup_memories(argv['<dir_path>'])
+        Brain.export_mem(argv['<dir_path>'])
     elif argv['--import']:
-        Brain.import_memories(argv['<file_path>'])
+        Brain.import_mem(argv['<file_path>'])
     elif len(Brain.memories) > 0:
-        Brain.display_memory(user_keywords)
+        Brain.display_mem(user_input)
     else:
         print('No memories exist')
 

@@ -3,24 +3,30 @@ import npyscreen as np
 from . import data
 
 class Memory:
-    def __init__(self, db_key=0, title='', keywords='', body=''):
+    # Constructor only called with params when initially retrieving memories from database
+    #   which does not store body.text so no param for body is needed.
+    # body.text is only set prior to being displayed in the terminal UI, but must be
+    #   initialized to empty string or an exception will get thrown for populating the
+    #   body_widget with a NoneType object
+    def __init__(self, db_key=None, title='', keywords=''):
         self.db_key = db_key
         self.title = title
         self.keywords = keywords
-        self.body = body
+        self.body = ''
         self.search_score = 0
 
     def __gt__(self, other_memory):
         return self.search_score > other_memory.search_score
 
     def __repr__(self):
-        return 'Memory {}: {}'.format(self.db_key, self.title)
+        return 'Memory {}: {}'.format(self.__dict__.items())
 
     def get_backup(self):
         return {k:v for k,v in self.__dict__.items() if k != 'search_score'}
 
     def make_set(self):
         # body text is not include in string match
+        print(self.title, self.keywords)
         m_data = ' '.join([self.title, self.keywords])
         return set(data.standardize(m_data))
 
@@ -50,10 +56,8 @@ class UI:
         keywords_widget = F.add(np.TitleText, name='Keywords:', value=self.keywords)
         body_widget = F.add(self.BoxedMultiLineEdit, name='Body', value=self.body)
         body_widget.entry_widget.scroll_exit = True
-
         F.edit()
 
-        # update UI member variables in case they have been changed by the user
         self.title = title_widget.value
         self.keywords = keywords_widget.value
         self.body = body_widget.value
