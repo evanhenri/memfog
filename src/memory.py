@@ -26,7 +26,6 @@ class Memory:
 
     def make_set(self):
         # body text is not include in string match
-        print(self.title, self.keywords)
         m_data = ' '.join([self.title, self.keywords])
         return set(data.standardize(m_data))
 
