@@ -8,10 +8,13 @@ from .memory import Memory, UI
 class Brain:
     def __init__(self, config):
         self.config = config
-
         self.excluded_words = io.set_from_file(self.config.exclusions_file_path)
         self.mem_db = io.DB(self.config.mem_db_path)
-        self.memories = [Memory(*record) for record in self.mem_db.dump()]
+        self.memories = dict()
+
+        for record in self.mem_db.dump():
+            Mem = Memory(*record)
+            self.memories[Mem.title] = Mem
 
     def export_mem(self, export_path):
         """
@@ -29,7 +32,7 @@ class Brain:
             if not user.confirm('overwrite of existing file {}'.format(export_path)):
                 return
 
-        mem_data = [Mem.get_backup() for Mem in self.memories]
+        mem_data = [Mem.get_backup() for Mem in self.memories.values()]
         io.json_to_file(export_path, mem_data)
 
     def create_mem(self):
@@ -67,7 +70,7 @@ class Brain:
                         changed_values.pop('body')
 
                     if len(changed_values) > 0:
-                        self.mem_db.update_many(Mem.db_key, changed_values)
+                        self.mem_db.update(Mem.db_key, changed_values)
 
                 except KeyboardInterrupt:
                     # catch to allow user to close Mem_UI with ^c
@@ -80,14 +83,27 @@ class Brain:
         :type file_path: str
         """
         json_memories = io.json_from_file(file_path)
+        skipped_memories = 0
 
         for record in json_memories:
             Mem = Memory()
             Mem.__dict__.update(record)
-            db_key = self.mem_db.insert(Mem)
-            io.str_to_file(self.config.body_dir_path + str(db_key), Mem.body)
 
-        print('Imported {} memories'.format(len(json_memories)))
+            if Mem.title in self.memories:
+                if self.config.force_import:
+                    body_path = self.config.body_dir_path + str(self.memories[Mem.title].db_key)
+                    io.str_to_file(body_path, Mem.body)
+                else:
+                    skipped_memories += 1
+                    print('Skipping duplicate - {}'.format(Mem.title))
+            else:
+                db_key = self.mem_db.insert(Mem)
+                io.str_to_file(self.config.body_dir_path + str(db_key), Mem.body)
+
+        if skipped_memories > 0:
+            print('Imported {}, Skipped {}'.format(len(json_memories) - skipped_memories, skipped_memories))
+        else:
+            print('Imported {}'.format(len(json_memories) - skipped_memories))
 
     def _fuzzy_match(self, user_input):
         """
@@ -96,13 +112,13 @@ class Brain:
         """
         user_search_str = ''.join(set(data.standardize(user_input)))
 
-        for Mem in self.memories:
+        for Mem in self.memories.values():
             mem_search_set = Mem.make_set()
             mem_search_set.difference_update(self.excluded_words)
             mem_search_str = ' '.join(mem_search_set)
             Mem.search_score = fuzz.token_sort_ratio(mem_search_str, user_search_str)
 
-        return [*sorted(self.memories)][-self.config.top_n::]
+        return [*sorted(self.memories.values())][-self.config.top_n::]
 
     def remove_mem(self, user_input):
         """
@@ -119,7 +135,7 @@ class Brain:
                 # delete body file in datadir
                 io.delete_file(self.config.body_dir_path + str(Mem.db_key))
 
-                self.memories.remove(Mem)
+                del self.memories[Mem.title]
                 mem_fuzz_matches.remove(Mem)
             else:
                 break
