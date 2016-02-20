@@ -1,4 +1,5 @@
 .idea/
 datadir/
 test.py
+*.json
 *.pyc
