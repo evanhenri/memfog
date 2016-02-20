@@ -6,19 +6,12 @@ from . import io, fs, user, data
 from .memory import Memory, UI
 
 class Brain:
-    def __init__(self):
-        self.data_dir = 'datadir/'
-        self.body_dir = self.data_dir + 'body/'
+    def __init__(self, config):
+        self.config = config
 
-        fs.init_dir(self.data_dir)
-        fs.init_dir(self.body_dir)
-        fs.init_file(self.data_dir + 'exclusions.txt')
-
-        self.excluded_words = io.set_from_file(self.data_dir + 'exclusions.txt')
-        self.mem_db = io.DB(self.data_dir + 'memories.db')
-
+        self.excluded_words = io.set_from_file(self.config.exclusions_file_path)
+        self.mem_db = io.DB(self.config.mem_db_path)
         self.memories = [Memory(*record) for record in self.mem_db.dump()]
-        self.top_n = 10
 
     def export_mem(self, export_path):
         """
@@ -48,7 +41,7 @@ class Brain:
             Mem.__dict__.update(Mem_UI.__dict__)
 
             db_key = self.mem_db.insert(Mem)
-            io.str_to_file(self.body_dir + str(db_key), Mem.body)
+            io.str_to_file(self.config.body_dir_path + str(db_key), Mem.body)
 
         except KeyboardInterrupt:
             print('Discarded new memory data')
@@ -63,12 +56,12 @@ class Brain:
             Mem = self.select_mem(mem_fuzz_matches, 'Display')
             if Mem is not None:
                 try:
-                    Mem.body = io.str_from_file(self.body_dir + str(Mem.db_key))
+                    Mem.body = io.str_from_file(self.config.body_dir_path + str(Mem.db_key))
                     Mem_UI = UI(Mem)
                     changed_values = Mem.diff(Mem_UI)
 
                     if 'body' in changed_values:
-                        io.str_to_file(self.body_dir + str(Mem.db_key), Mem_UI.body)
+                        io.str_to_file(self.config.body_dir_path + str(Mem.db_key), Mem_UI.body)
 
                         # remove body so it is not present when dict is passed to mem_db.update_many
                         changed_values.pop('body')
@@ -77,7 +70,7 @@ class Brain:
                         self.mem_db.update_many(Mem.db_key, changed_values)
 
                 except KeyboardInterrupt:
-                    # if
+                    # catch to allow user to close Mem_UI with ^c
                     pass
             else:
                 break
@@ -92,7 +85,7 @@ class Brain:
             Mem = Memory()
             Mem.__dict__.update(record)
             db_key = self.mem_db.insert(Mem)
-            io.str_to_file(self.body_dir + str(db_key), Mem.body)
+            io.str_to_file(self.config.body_dir_path + str(db_key), Mem.body)
 
         print('Imported {} memories'.format(len(json_memories)))
 
@@ -105,13 +98,11 @@ class Brain:
 
         for Mem in self.memories:
             mem_search_set = Mem.make_set()
-
-            # exluded words are not considered in memory matching
             mem_search_set.difference_update(self.excluded_words)
-
             mem_search_str = ' '.join(mem_search_set)
             Mem.search_score = fuzz.token_sort_ratio(mem_search_str, user_search_str)
-        return [*sorted(self.memories)][-self.top_n::]
+
+        return [*sorted(self.memories)][-self.config.top_n::]
 
     def remove_mem(self, user_input):
         """
@@ -126,7 +117,7 @@ class Brain:
                 self.mem_db.remove(Mem.db_key)
 
                 # delete body file in datadir
-                io.delete_file(self.body_dir + str(Mem.db_key))
+                io.delete_file(self.config.body_dir_path + str(Mem.db_key))
 
                 self.memories.remove(Mem)
                 mem_fuzz_matches.remove(Mem)

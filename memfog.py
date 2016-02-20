@@ -16,18 +16,37 @@ Options:
 
 """
 from docopt import docopt
+import os
 
-from src import data, brain
+from src import fs, data, brain
+
+class Config:
+    def __init__(self, root_dir):
+        self.top_n = 10
+        self.data_dir = 'datadir/'
+        self.mem_db = 'memories.db'
+        self.body_dir = 'body/'
+        self.exclusions_file = 'exclusions.txt'
+
+        self.data_dir_path = root_dir + self.data_dir
+        self.mem_db_path = self.data_dir_path + self.mem_db
+        self.body_dir_path = self.data_dir_path + self.body_dir
+        self.exclusions_file_path = self.data_dir_path + self.exclusions_file
+
+        fs.init_dir(self.data_dir_path)
+        fs.init_dir(self.body_dir_path)
+        fs.init_file(self.exclusions_file_path)
 
 def main(argv):
-    Brain = brain.Brain()
+    root_dir = os.path.dirname(os.path.realpath(__file__)) + '/'
+    Conf = Config(root_dir)
 
     top_n = argv['--top']
     if top_n:
-        if data.is_valid_input(top_n):
-            Brain.top_n = int(top_n)
-        else:
-            print('Invalid threshold value \'{}\''.format(top_n))
+        if data.is_valid_input(top_n): Conf.top_n = int(top_n)
+        else: print('Invalid threshold value \'{}\''.format(top_n))
+
+    Brain = brain.Brain(Conf)
 
     # delimit words with whitespace so they can be processed at same time as memory string data
     user_input = ' '.join(argv['<keyword>'])
