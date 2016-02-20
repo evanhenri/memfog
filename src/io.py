@@ -28,7 +28,7 @@ class DB:
         self.cursor.execute(sql)
         self.connection.commit()
 
-    def update_many(self, record_key, memory_updates={}):
+    def update(self, record_key, memory_updates={}):
         def _construct_str(dictionary):
             """
             returns str of key="value" for each key value pair in dictionary
