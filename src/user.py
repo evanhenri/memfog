@@ -1,20 +1,20 @@
 import readline
 
-from . import data
+from . import util
 
-def confirm(msg=''):
+def prompt_yn(msg=''):
     """
     :type msg: str
     :rtype: bool
     """
-    return input('Confirm {} - y/n?\n> '.format(msg)).lower() == 'y'
+    return input('{} - y/n?\n> '.format(msg)).lower() == 'y'
 
 def get_input():
     """
     :rtype: int or None
     """
     entry = input('> ')
-    if data.is_valid_input(entry):
+    if util.is_valid_input(entry):
         return int(entry)
     return None
 

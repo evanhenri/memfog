@@ -15,7 +15,7 @@ Options:
 from docopt import docopt
 import os
 
-from src import fs, data, brain
+from src import fs, util, brain
 
 class Config:
     def __init__(self, root_dir):
@@ -39,12 +39,14 @@ class Config:
 def main(argv):
     root_dir = os.path.dirname(os.path.realpath(__file__)) + '/'
     Conf = Config(root_dir)
-
     Conf.force_import = argv['--force']
+
     top_n = argv['--top']
     if top_n:
-        if data.is_valid_input(top_n): Conf.top_n = int(top_n)
-        else: print('Invalid threshold value \'{}\''.format(top_n))
+        if util.is_valid_input(top_n):
+            Conf.top_n = int(top_n)
+        else:
+            print('Invalid threshold value \'{}\''.format(top_n))
 
     Brain = brain.Brain(Conf)
 
