@@ -1,6 +1,7 @@
 import npyscreen as np
+import signal
 
-from . import data
+from . import util
 
 class Memory:
     # Constructor only called with params when initially retrieving memories from database
@@ -27,7 +28,7 @@ class Memory:
     def make_set(self):
         # body text is not include in string match
         m_data = ' '.join([self.title, self.keywords])
-        return set(data.standardize(m_data))
+        return set(util.standardize(m_data))
 
     def diff(self, Mem_UI):
         memory_changes = {}
@@ -47,6 +48,7 @@ class UI:
         self.title = Mem.title
         self.keywords = Mem.keywords
         self.body = Mem.body
+        self.altered = False
         np.wrapper_basic(self._run)
 
     def _run(self, *args):
@@ -55,9 +57,31 @@ class UI:
         keywords_widget = F.add(np.TitleText, name='Keywords:', value=self.keywords)
         body_widget = F.add(self.BoxedMultiLineEdit, name='Body', value=self.body)
         body_widget.entry_widget.scroll_exit = True
+
+        def change_detected():
+            return any([self.title != title_widget.value,
+                        self.keywords != keywords_widget.value,
+                        self.body != body_widget.value])
+
+        def ctrl_c_handler(signal, frame):
+            self.__dict__['_save'] = False
+
+            if change_detected() and np.notify_yes_no('Save changes?'):
+                # set save = True only if user selected 'yes' button
+                self.__dict__['_save'] = True
+
+            # break out of npyscreen ui
+            F.exit_editing()
+
+        signal.signal(signal.SIGINT, ctrl_c_handler)
         F.edit()
 
-        self.title = title_widget.value
-        self.keywords = keywords_widget.value
-        self.body = body_widget.value
+        # if ctrl-c was used, save_trigger gets set from result of np.notify_yes_no popup selection
+        #   otherwise save_trigger only == True if a text field has been changed
+        save_trigger = self.__dict__.setdefault('_save', True) and change_detected()
 
+        if save_trigger:
+            self.title = title_widget.value
+            self.keywords = keywords_widget.value
+            self.body = body_widget.value
+            self.altered = True
