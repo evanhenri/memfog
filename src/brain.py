@@ -2,7 +2,7 @@ from fuzzywuzzy import fuzz
 import datetime
 import os
 
-from . import io, fs, user, data
+from . import io, fs, user, util
 from .memory import Memory, UI
 
 class Brain:
@@ -29,26 +29,22 @@ class Brain:
         export_path = export_dir + export_file
 
         if os.path.isfile(export_path):
-            if not user.confirm('overwrite of existing file {}'.format(export_path)):
+            if not user.prompt_yn('Overwrite existing file {}'.format(export_path)):
                 return
 
         mem_data = [Mem.get_backup() for Mem in self.memories.values()]
         io.json_to_file(export_path, mem_data)
 
     def create_mem(self):
-        try:
-            Mem = Memory()
+        Mem = Memory()
 
-            # display UI so user can fill in memory data
-            Mem_UI = UI(Mem)
+        # display UI so user can fill in memory data
+        Mem_UI = UI(Mem)
+
+        if Mem_UI.altered:
             Mem.__dict__.update(Mem_UI.__dict__)
-
             db_key = self.mem_db.insert(Mem)
             io.str_to_file(self.config.body_dir_path + str(db_key), Mem.body)
-
-        except KeyboardInterrupt:
-            print('Discarded new memory data')
-            return
 
     def display_mem(self, user_keywords):
         """
@@ -57,24 +53,24 @@ class Brain:
         mem_fuzz_matches = self._fuzzy_match(user_keywords)
         while True:
             Mem = self.select_mem(mem_fuzz_matches, 'Display')
+
+            # Mem is None when user enters an invalid memory selection or hits ENTER with no selection
             if Mem is not None:
-                try:
-                    Mem.body = io.str_from_file(self.config.body_dir_path + str(Mem.db_key))
-                    Mem_UI = UI(Mem)
-                    changed_values = Mem.diff(Mem_UI)
+                Mem.body = io.str_from_file(self.config.body_dir_path + str(Mem.db_key))
+                Mem_UI = UI(Mem)
 
-                    if 'body' in changed_values:
-                        io.str_to_file(self.config.body_dir_path + str(Mem.db_key), Mem_UI.body)
+                # get memory attributes that have changed that require saving
+                changed_values = Mem.diff(Mem_UI)
 
-                        # remove body so it is not present when dict is passed to mem_db.update_many
-                        changed_values.pop('body')
+                if 'body' in changed_values:
+                    io.str_to_file(self.config.body_dir_path + str(Mem.db_key), Mem_UI.body)
 
-                    if len(changed_values) > 0:
-                        self.mem_db.update(Mem.db_key, changed_values)
+                    # remove body because if other attributes have changed, changed_values
+                    #   gets passed to mem_db.update_many to write the passed in dict to the db
+                    changed_values.pop('body')
 
-                except KeyboardInterrupt:
-                    # catch to allow user to close Mem_UI with ^c
-                    pass
+                if len(changed_values) > 0:
+                    self.mem_db.update(Mem.db_key, changed_values)
             else:
                 break
 
@@ -110,13 +106,13 @@ class Brain:
         :type user_input: str
         :returns: top_n Memories in self.memories list sorted by Memory.search_score in ascending order
         """
-        user_search_str = ''.join(set(data.standardize(user_input)))
+        user_search_str = ''.join(set(util.standardize(user_input)))
 
         for Mem in self.memories.values():
             mem_search_set = Mem.make_set()
             mem_search_set.difference_update(self.excluded_words)
             mem_search_str = ' '.join(mem_search_set)
-            Mem.search_score = fuzz.token_sort_ratio(mem_search_str, user_search_str)
+            Mem.search_score = fuzz.token_set_ratio(mem_search_str, user_search_str)
 
         return [*sorted(self.memories.values())][-self.config.top_n::]
 
@@ -128,7 +124,7 @@ class Brain:
             mem_fuzz_matches = self._fuzzy_match(user_input)
             Mem = self.select_mem(mem_fuzz_matches, 'Remove')
 
-            if Mem and user.confirm('delete'):
+            if Mem and user.prompt_yn('Delete {}'.format(Mem.title)):
                 # delete memory record in db
                 self.mem_db.remove(Mem.db_key)
 
@@ -161,4 +157,3 @@ class Brain:
                     print('Invalid memory selection \'{}\''.format(selection))
         else:
             print('No memories exist')
-        return None
