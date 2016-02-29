@@ -1,6 +1,18 @@
 import string
 import shlex
 
+def k_intersect_v_diff(dict_a, dict_b):
+    """
+    :type dict_a: dict
+    :type dict_b: dict
+    :returns set containing keys found in both dicts if the value for that key is diffent between dicts
+    """
+    updated_keys = set()
+    for k in dict_a.keys():
+        if k in dict_b and dict_a[k] != dict_b[k]:
+            updated_keys.add(k)
+    return updated_keys
+
 def is_valid_input(s):
     """
     :type s: str

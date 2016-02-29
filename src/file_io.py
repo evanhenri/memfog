@@ -1,75 +1,75 @@
 import os
 import json
 
-from . import fs
+from . import file_sys
 
-def delete_file(file_path):
+def delete_file(fp):
     """
-    :type file_path: str
+    :type fp: str
     """
     try:
-        if fs.file_exists(file_path):
-            os.remove(file_path)
+        if file_sys.file_exists(fp):
+            os.remove(fp)
     except Exception as e:
-        print('Error occured while deleting {}\n{}'.format(file_path, e.args))
+        print('Error occured while deleting {}\n{}'.format(fp, e.args))
 
-def json_from_file(file_path):
+def json_from_file(fp):
     """
-    :type file_path: str
+    :type fp: str
     """
     try:
-        if fs.file_exists(file_path):
-            with open(file_path, 'r') as f:
+        if file_sys.file_exists(fp):
+            with open(fp, 'r') as f:
                 return json.load(f)
         return dict()
     except Exception as e:
-        print('Error occured while reading {} as json\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as json\n{}'.format(fp, e.args))
 
-def json_to_file(file_path, payload):
+def json_to_file(fp, content):
     """
-    :type file_path: str
-    :type payload: json encodable obj
+    :type fp: str
+    :type content: json encodable obj
     """
     try:
-        with open(file_path, 'w') as f:
-            json.dump(payload, f, indent=4)
-        print('Saved {}'.format(file_path))
+        with open(fp, 'w') as f:
+            json.dump(content, f, indent=4)
+        print('Saved {}'.format(fp))
     except Exception as e:
-        print('Error occured while writing json to {}\n{}'.format(file_path, e.args))
+        print('Error occured while writing json to {}\n{}'.format(fp, e.args))
 
-def set_from_file(file_path):
+def set_from_file(fp):
     """
-    :type file_path: str
+    :type fp: str
     :returns: contents of file at file_path where each line is an element in returned set
     """
     try:
-        if fs.file_exists(file_path):
-            with open(file_path, 'r') as f:
+        if file_sys.file_exists(fp):
+            with open(fp, 'r') as f:
                 return set([line.strip() for line in f.readlines()])
         return set()
     except Exception as e:
-        print('Error occured while reading {} as set\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as set\n{}'.format(fp, e.args))
 
-def str_from_file(file_path):
+def str_from_file(fp):
     """
-    :type file_path: str
+    :type fp: str
     :returns: contents of file at file_path as string
     """
     try:
-        if fs.file_exists(file_path):
-            with open(file_path, 'r') as f:
+        if file_sys.file_exists(fp):
+            with open(fp, 'r') as f:
                 return f.read()
         return str()
     except Exception as e:
-        print('Error occured while reading {} as string\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as string\n{}'.format(fp, e.args))
 
-def str_to_file(file_path, payload):
+def str_to_file(fp, content):
     """
-    :type file_path: str
-    :type payload: str
+    :type fp: str
+    :type content: str
     """
     try:
-        with open(file_path, 'w') as f:
-            f.write(payload)
+        with open(fp, 'w') as f:
+            f.write(content)
     except Exception as e:
-        print('Error occured while reading {} as set\n{}'.format(file_path, e.args))
+        print('Error occured while reading {} as set\n{}'.format(fp, e.args))
