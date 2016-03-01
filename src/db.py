@@ -55,7 +55,7 @@ class Record(Base):
         return 'Memory {}: {}'.format(self.__dict__.items())
 
     def dump(self):
-        return { 'row':self.row, 'title':self.title,'keywords':self.keywords,'body':self.body }
+        return { 'title':self.title,'keywords':self.keywords,'body':self.body }
 
     def make_set(self):
         # body text is not include in string match
