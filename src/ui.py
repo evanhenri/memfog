@@ -2,22 +2,10 @@ import urwid
 import urwid.curses_display
 import itertools
 
-class Header(urwid.Columns):
-    def __init__(self, title_text):
-        self.widgets = [
-            (urwid.AttrMap(urwid.Edit(edit_text=title_text, align='center'), 'HDR'))
-        ]
-        super(Header, self).__init__(self.widgets)
-
-    def __getitem__(self, item):
-        accessible = {
-            'title':self.widgets[0],
-        }
-        return accessible[item].base_widget
-
 class Content(urwid.ListBox):
     def __init__(self, Rec):
         self.widgets = urwid.SimpleFocusListWalker([
+            (urwid.AttrMap(urwid.Edit(edit_text=Rec.title, align='center'), 'HDR')),
             urwid.Edit( caption='Keywords:', edit_text=Rec.keywords, align='left', wrap='clip'),
             urwid.Edit( edit_text=Rec.body, align='left', multiline=True, allow_tab=True),
         ])
@@ -25,8 +13,9 @@ class Content(urwid.ListBox):
 
     def __getitem__(self, item):
         accessible = {
-            'keywords':self.widgets[0],
-            'body':self.widgets[1],
+            'title':self.widgets[0].base_widget,
+            'keywords':self.widgets[1],
+            'body':self.widgets[2],
         }
         return accessible[item]
 
@@ -39,8 +28,8 @@ class Footer(urwid.Pile):
                     ('pack', urwid.AttrMap(urwid.Text(' Exit  '), 'FTR')),
                     ('pack', urwid.AttrMap(urwid.Text('^S'), 'FTR_CMD')),
                     ('pack', urwid.AttrMap(urwid.Text(' Save  '), 'FTR')),
-                    ('pack', urwid.AttrMap(urwid.Text('AA'), 'FTR_CMD')),
-                    ('pack', urwid.AttrMap(urwid.Text(' BB  '), 'FTR')),
+                    ('pack', urwid.AttrMap(urwid.Text('i / ESC'), 'FTR_CMD')),
+                    ('pack', urwid.AttrMap(urwid.Text(' Toggle Mode  '), 'FTR')),
                     (urwid.Padding(urwid.AttrMap(urwid.Text(''), 'HDR'), align='right', width=('relative', 25)))
                 ]
             ),
@@ -70,14 +59,12 @@ class Display(urwid.Frame):
     """ Contains container widgets that hold individual widgets for each section """
     def __init__(self, Rec):
         self._content = urwid.AttrMap(Content(Rec), attr_map='BODY')
-        self._header = urwid.AttrMap(Header(Rec.title), attr_map='HDR')
         self._footer = urwid.AttrMap(Footer(), attr_map='FTR')
-        super(Display, self).__init__(self._content, self._header, self._footer)
+        super(Display, self).__init__(body=self._content, footer=self._footer)
 
     def __getitem__(self, item):
         accessible = {
             'content':self._content,
-            'header':self._header,
             'footer':self._footer
         }
         return accessible[item].base_widget
@@ -152,7 +139,7 @@ class UI:
         return self.starting_values != self.dump()
 
     def dump(self):
-        return { 'title':self.display['header']['title'].edit_text,
+        return { 'title':self.display['content']['title'].edit_text,
                  'keywords':self.display['content']['keywords'].edit_text,
                  'body':self.display['content']['body'].edit_text }
 
@@ -173,7 +160,7 @@ class UI:
                 if k == 'window resize':
                     size = self.screen.get_cols_rows()
 
-                elif k == '~':
+                elif k == 'ctrl x':
                     [setattr(self, key, value) for key, value in self.dump().items()]
                     return
 
