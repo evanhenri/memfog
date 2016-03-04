@@ -1,12 +1,15 @@
 import urwid
 import urwid.curses_display
 import itertools
+import signal
 
 class Content(urwid.ListBox):
     def __init__(self, Rec):
         self.widgets = urwid.SimpleFocusListWalker([
             (urwid.AttrMap(urwid.Edit(edit_text=Rec.title, align='center'), 'HDR')),
-            urwid.Edit( caption='Keywords:', edit_text=Rec.keywords, align='left', wrap='clip'),
+            urwid.Divider('-'),
+            urwid.Edit( caption='Keywords: ', edit_text=Rec.keywords, align='left', wrap='clip'),
+            urwid.Divider(' '),
             urwid.Edit( edit_text=Rec.body, align='left', multiline=True, allow_tab=True),
         ])
         super(Content, self).__init__(self.widgets)
@@ -14,8 +17,8 @@ class Content(urwid.ListBox):
     def __getitem__(self, item):
         accessible = {
             'title':self.widgets[0].base_widget,
-            'keywords':self.widgets[1],
-            'body':self.widgets[2],
+            'keywords':self.widgets[2],
+            'body':self.widgets[4],
         }
         return accessible[item]
 
@@ -26,11 +29,9 @@ class Footer(urwid.Pile):
                 [
                     ('pack', urwid.AttrMap(urwid.Text('^X'), 'FTR_CMD')),
                     ('pack', urwid.AttrMap(urwid.Text(' Exit  '), 'FTR')),
-                    ('pack', urwid.AttrMap(urwid.Text('^S'), 'FTR_CMD')),
-                    ('pack', urwid.AttrMap(urwid.Text(' Save  '), 'FTR')),
                     ('pack', urwid.AttrMap(urwid.Text('i / ESC'), 'FTR_CMD')),
                     ('pack', urwid.AttrMap(urwid.Text(' Toggle Mode  '), 'FTR')),
-                    (urwid.Padding(urwid.AttrMap(urwid.Text(''), 'HDR'), align='right', width=('relative', 25)))
+                    (urwid.Padding(urwid.AttrMap(urwid.Text(''), 'HDR'), align='right', width=('relative', 15)))
                 ]
             ),
             urwid.Edit(caption='>', edit_text='', align='left', wrap='clip'),
@@ -122,6 +123,9 @@ class Screen(urwid.curses_display.Screen):
 
 class UI:
     def __init__(self, Rec):
+        signal.signal(signal.SIGINT, self.ctrl_c_handler)
+        self._force_exit = False
+
         self.screen = Screen()
         self.display = Display(Rec)
         self.starting_values = Rec.dump()
@@ -137,6 +141,9 @@ class UI:
     def altered(self):
         """ Returns True if any values in Rec have been changed """
         return self.starting_values != self.dump()
+
+    def ctrl_c_handler(self, sig, frame):
+        self._force_exit = True
 
     def dump(self):
         return { 'title':self.display['content']['title'].edit_text,
@@ -156,6 +163,11 @@ class UI:
 
             while not keys:
                 keys = self.screen.get_input()
+
+                if self._force_exit:
+                    [setattr(self, key, value) for key, value in self.dump().items()]
+                    return
+
             for k in keys:
                 if k == 'window resize':
                     size = self.screen.get_cols_rows()
@@ -169,6 +181,7 @@ class UI:
                         self.screen.switch_mode()
                     else:
                         self.display.keypress( size, k )
+
                 elif self.screen.mode['label'] == 'COMMAND':
                     if k in ['a','A','i','I','o','O']:
                         self.screen.switch_mode()
