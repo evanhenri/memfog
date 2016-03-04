@@ -1,54 +1,189 @@
-import npyscreen as np
-import signal
+import urwid
+import urwid.curses_display
+import itertools
+
+class Header(urwid.Columns):
+    def __init__(self, title_text):
+        self.widgets = [
+            (urwid.AttrMap(urwid.Edit(edit_text=title_text, align='center'), 'HDR'))
+        ]
+        super(Header, self).__init__(self.widgets)
+
+    def __getitem__(self, item):
+        accessible = {
+            'title':self.widgets[0],
+        }
+        return accessible[item].base_widget
+
+class Content(urwid.ListBox):
+    def __init__(self, Rec):
+        self.widgets = urwid.SimpleFocusListWalker([
+            urwid.Edit( caption='Keywords:', edit_text=Rec.keywords, align='left', wrap='clip'),
+            urwid.Edit( edit_text=Rec.body, align='left', multiline=True, allow_tab=True),
+        ])
+        super(Content, self).__init__(self.widgets)
+
+    def __getitem__(self, item):
+        accessible = {
+            'keywords':self.widgets[0],
+            'body':self.widgets[1],
+        }
+        return accessible[item]
+
+class Footer(urwid.Pile):
+    def __init__(self):
+        self.widgets = [
+            urwid.Columns(
+                [
+                    ('pack', urwid.AttrMap(urwid.Text('^X'), 'FTR_CMD')),
+                    ('pack', urwid.AttrMap(urwid.Text(' Exit  '), 'FTR')),
+                    ('pack', urwid.AttrMap(urwid.Text('^S'), 'FTR_CMD')),
+                    ('pack', urwid.AttrMap(urwid.Text(' Save  '), 'FTR')),
+                    ('pack', urwid.AttrMap(urwid.Text('AA'), 'FTR_CMD')),
+                    ('pack', urwid.AttrMap(urwid.Text(' BB  '), 'FTR')),
+                    (urwid.Padding(urwid.AttrMap(urwid.Text(''), 'HDR'), align='right', width=('relative', 25)))
+                ]
+            ),
+            urwid.Edit(caption='>', edit_text='', align='left', wrap='clip'),
+        ]
+        super(Footer, self).__init__(self.widgets)
+
+    def __getitem__(self, item):
+        accessible = {
+            'label_widget_mirror':self.widgets[0][-1].base_widget,
+            'cmd':self.widgets[-1]
+        }
+        return accessible[item]
+
+    def mode_label_callback(self, widget, signal, label_text):
+        """ Called when Mode.label_widget emits 'change' signal in response to its edit_text being changed """
+        self.widgets[0][-1].base_widget.set_text(label_text)
+
+    def cmd_input(self, k):
+        """ Handles keypresses entered when COMMAND is current mode to display then in the command entry field widget """
+        if k == 'ctrl l':
+            self.widgets[-1].set_edit_text('')
+        else:
+            self.widgets[-1].keypress((1,), k)
+
+class Display(urwid.Frame):
+    """ Contains container widgets that hold individual widgets for each section """
+    def __init__(self, Rec):
+        self._content = urwid.AttrMap(Content(Rec), attr_map='BODY')
+        self._header = urwid.AttrMap(Header(Rec.title), attr_map='HDR')
+        self._footer = urwid.AttrMap(Footer(), attr_map='FTR')
+        super(Display, self).__init__(self._content, self._header, self._footer)
+
+    def __getitem__(self, item):
+        accessible = {
+            'content':self._content,
+            'header':self._header,
+            'footer':self._footer
+        }
+        return accessible[item].base_widget
+
+class Mode:
+    """ Contains data that differs between interface modes and objects to trigger mode switching """
+    def __init__(self):
+        # label_widget_mirror mirrors the text in label_widget and updates in response to 'change' signal
+        #  emitted by label_widget to label_widget_mirror whenever label_widget is changed
+        self.label_widget = urwid.Edit(caption='Mode: ')
+        self.identifiers = ['COMMAND','INSERT']
+        self.palettes = [
+            [
+                # normal mode
+                ('HDR', 'white', 'black', 'bold'),
+                ('FTR', 'white', 'black', 'bold'),
+                ('FTR_CMD', 'dark gray', 'light gray', 'bold'),
+                ('MODE', 'white', 'black', 'bold')
+            ],
+            [
+                # insert mode
+                ('HDR','white',      'dark magenta', 'bold'),
+                ('FTR','white',      'dark magenta', 'bold'),
+                ('FTR_CMD', 'dark gray', 'light gray', 'bold'),
+                ('NORMAL_MODE', 'dark gray', 'light gray', 'bold'),
+            ]
+        ]
+        self.settings = zip(self.identifiers, self.palettes)
+
+    def __getitem__(self, item):
+        accessible = {
+            'caption':self.label_widget.caption,
+            'label':self.label_widget.edit_text,
+            'text':self.label_widget.caption + self.label_widget.edit_text
+        }
+        return accessible[item]
+
+class Screen(urwid.curses_display.Screen):
+    """ Contains functionality to change appearence and behavior of terminal interface """
+    def __init__(self):
+        super(Screen, self).__init__()
+        self.mode = Mode()
+        self._switcher = self._swith_generator()
+
+    def switch_mode(self):
+        """ Helper function so next() does not need to be used directly when switching modes """
+        next(self._switcher)
+
+    def _swith_generator(self):
+        """ Infitite circular iterator used to flip back and forth between modes """
+        for identifier, palette in itertools.cycle(self.mode.settings):
+            self.register_palette( palette )
+            self.mode.label_widget.set_edit_text(identifier)
+            yield
 
 class UI:
-    class BoxedMultiLineEdit(np.BoxTitle):
-        _contained_widget = np.MultiLineEdit
-
-    # Any Record objext can be passed to UI constructor and its contents will be used
-    # to populate the widget text areas. Any changes made to the Record will be reflected
-    # in the database when the UI is closed
     def __init__(self, Rec):
-        self.__dict__.update(Rec.dump())
-        self.altered = False
-        self._forced_close = False
-        np.wrapper_basic(self._run)
+        self.screen = Screen()
+        self.display = Display(Rec)
+        self.starting_values = Rec.dump()
+
+        # Establish connection between Mode.widget and in Footer mode widget.
+        # Footer mode widget mirrors the contents of Mode.widget and is a label indicator of current input mode
+        urwid.connect_signal(self.screen.mode.label_widget, 'change',
+                             self.display['footer'].mode_label_callback,
+                             user_args=[self.screen.mode['text']])
+
+        self.screen.run_wrapper( self._run )
+
+    def altered(self):
+        """ Returns True if any values in Rec have been changed """
+        return self.starting_values != self.dump()
 
     def dump(self):
-        return {'title':self.title,'keywords':self.keywords,'body':self.body}
+        return { 'title':self.display['header']['title'].edit_text,
+                 'keywords':self.display['content']['keywords'].edit_text,
+                 'body':self.display['content']['body'].edit_text }
 
-    def _run(self, *args):
-        F = np.Form()
-        title_widget = F.add(np.TitleText, name='Title:', value=self.title)
-        keywords_widget = F.add(np.TitleText, name='Keywords:', value=self.keywords)
-        body_widget = F.add(self.BoxedMultiLineEdit, name='Body', value=self.body)
-        body_widget.entry_widget.scroll_exit = True
+    def _run(self):
+        size = self.screen.get_cols_rows()
 
-        def change_detected():
-            return any([self.title != title_widget.value,
-                        self.keywords != keywords_widget.value,
-                        self.body != body_widget.value])
+        # set initial mode values for terminal interface
+        self.screen.switch_mode()
 
-        def ctrl_c_handler(signal, frame):
-            self._forced_close = True
+        while True:
+            canvas = self.display.render( size, focus=True )
+            self.screen.draw_screen( size, canvas )
+            keys = None
 
-            if change_detected() and np.notify_yes_no('Save changes?'):
-                # set save = True only if user selected 'yes' button
-                self.altered = True
+            while not keys:
+                keys = self.screen.get_input()
+            for k in keys:
+                if k == 'window resize':
+                    size = self.screen.get_cols_rows()
 
-            # break out of npyscreen ui
-            F.exit_editing()
+                elif k == '~':
+                    [setattr(self, key, value) for key, value in self.dump().items()]
+                    return
 
-        signal.signal(signal.SIGINT, ctrl_c_handler)
-        F.edit()
-
-        # altered flag set if user changed record text and exited using OK button
-        if not self._forced_close and change_detected():
-            self.altered = True
-
-        # altered flag will be set if any change was made regardless
-        #  of if ui was closed using the OK button or by using ctrl-c
-        if self.altered:
-            self.title = title_widget.value
-            self.keywords = keywords_widget.value
-            self.body = body_widget.value
+                elif self.screen.mode['label'] == 'INSERT':
+                    if k == 'esc':
+                        self.screen.switch_mode()
+                    else:
+                        self.display.keypress( size, k )
+                elif self.screen.mode['label'] == 'COMMAND':
+                    if k in ['a','A','i','I','o','O']:
+                        self.screen.switch_mode()
+                    else:
+                        self.display['footer'].cmd_input(k)
