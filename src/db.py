@@ -26,23 +26,23 @@ class Database:
         self.session.commit()
 
     def remove(self, Rec):
-        self.session.query(Record).filter_by(row=Rec.row).delete()
+        self.session.query(Record).filter_by(row_id=Rec.row_id).delete()
         self.session.commit()
 
     def update(self, Rec, keys={}):
         updated_fields = { k:v for k,v in Rec.dump().items() if k in keys }
-        self.session.query(Record).filter_by(row=Rec.row).update(updated_fields)
+        self.session.query(Record).filter_by(row_id=Rec.row_id).update(updated_fields)
         self.session.commit()
 
 class Record(Base):
     __tablename__ = 'record'
-    row = Column('row', Integer, primary_key=True)
+    row_id = Column('row_id', Integer, primary_key=True)
     title = Column('title', String, nullable=False)
     keywords = Column('keywords', String)
     body = Column('body', Text)
 
-    def __init__(self, row=None, title='', keywords='', body=''):
-        self.row = row
+    def __init__(self, row_id=None, title='', keywords='', body=''):
+        self.row_id = row_id
         self.title = title
         self.keywords = keywords
         self.body = body
