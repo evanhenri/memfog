@@ -199,5 +199,5 @@ def main(argv):
         print('No memories exist')
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.5.0')
+    args = docopt(__doc__, version='memfog v1.6.1')
     main(args)
