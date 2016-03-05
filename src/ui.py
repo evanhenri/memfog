@@ -115,7 +115,7 @@ class Screen(urwid.curses_display.Screen):
         next(self._switcher)
 
     def _swith_generator(self):
-        """ Infitite circular iterator used to flip back and forth between modes """
+        """ Infinite circular iterator used to flip back and forth between modes """
         for identifier, palette in itertools.cycle(self.mode.settings):
             self.register_palette( palette )
             self.mode.label_widget.set_edit_text(identifier)
@@ -185,5 +185,12 @@ class UI:
                 elif self.screen.mode['label'] == 'COMMAND':
                     if k in ['a','A','i','I','o','O']:
                         self.screen.switch_mode()
+                    # if user tries to scroll when focus is on command widget, change focus
+                    #   to the body and send up / down keypress. Focus immediately returned
+                    #   to command widget when awaiting next keypress
+                    elif k in ['up', 'down']:
+                        self.display.set_focus('body')
+                        self.display.keypress(size, k)
                     else:
                         self.display['footer'].cmd_input(k)
+
