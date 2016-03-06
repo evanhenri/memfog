@@ -9,7 +9,7 @@ class Content(urwid.ListBox):
             (urwid.AttrMap(urwid.Edit(edit_text=Rec.title, align='center'), 'HDR')),
             urwid.Divider('-'),
             urwid.Edit( caption='Keywords: ', edit_text=Rec.keywords, align='left', wrap='clip'),
-            urwid.Divider(' '),
+            urwid.Divider('-'),
             urwid.Edit( edit_text=Rec.body, align='left', multiline=True, allow_tab=True),
         ])
         super(Content, self).__init__(self.widgets)
@@ -45,7 +45,7 @@ class Footer(urwid.Pile):
         }
         return accessible[item]
 
-    def mode_label_callback(self, widget, signal, label_text):
+    def mode_label_callback(self, widget, cb_signal, label_text):
         """ Called when Mode.label_widget emits 'change' signal in response to its edit_text being changed """
         self.widgets[0][-1].base_widget.set_text(label_text)
 

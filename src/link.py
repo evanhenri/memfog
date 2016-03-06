@@ -23,9 +23,3 @@ class Link:
                 s = s.replace(match.group(0), g)
 
         return s
-
-
-
-
-
-
