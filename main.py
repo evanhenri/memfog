@@ -16,6 +16,7 @@ Options:
 """
 from docopt import docopt
 from fuzzywuzzy import fuzz
+from more_itertools import unique_everseen
 import datetime
 import os
 
@@ -110,12 +111,13 @@ class Memfog:
         :type user_input: str
         :returns: top_n Records from self.records sorted by Record.search_score in ascending order
         """
-        user_search_str = ''.join(set(util.standardize(user_input)))
+        user_search_str = ''.join(unique_everseen(util.standardize(user_input)))
 
         for Rec in self.Records.values():
             word_set = Rec.make_set()
             word_set.difference_update(self.excluded_words)
             word_str = ' '.join(word_set)
+            print(user_search_str)
             Rec.search_score = fuzz.token_set_ratio(word_str, user_search_str)
 
         return [*sorted(self.Records.values())][-self.config.top_n::]
