@@ -117,7 +117,6 @@ class Memfog:
             word_set = Rec.make_set()
             word_set.difference_update(self.excluded_words)
             word_str = ' '.join(word_set)
-            print(user_search_str)
             Rec.search_score = fuzz.token_set_ratio(word_str, user_search_str)
 
         return [*sorted(self.Records.values())][-self.config.top_n::]
