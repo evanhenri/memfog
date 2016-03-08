@@ -1,108 +1,105 @@
-import urwid
+from urwid import AttrMap, Columns, Divider, Edit, Frame, ListBox, Text, SimpleFocusListWalker, WidgetPlaceholder
 import urwid.curses_display
+from collections import deque
 import itertools
 import signal
-from collections import deque
 
-class Header(urwid.Columns):
+class Header(Columns):
     def __init__(self, Rec, mode_label):
         self.widgets = [
-            (urwid.AttrMap(urwid.Edit(edit_text=Rec.title, align='center'), 'HDR')),
-            (urwid.Padding(urwid.AttrMap(urwid.Text(mode_label), 'HDR'), align='right', width=('relative', 15)))
+            (AttrMap(Text(mode_label, align='left'), 'HEADER')),
+            (AttrMap(Edit(edit_text=Rec.title, align='right'), 'HEADER'))
         ]
         super(Header, self).__init__(self.widgets)
 
     def __getitem__(self, item):
         accessible = {
-            'title':self.widgets[0].base_widget,
-            'mode_label':self.widgets[-1].base_widget,
+            'mode':self.widgets[0].base_widget,
+            'title':self.widgets[-1].base_widget
         }
         return accessible[item]
 
-class Content(urwid.ListBox):
+class Content(ListBox):
     def __init__(self, Rec, mode_label):
-        self.widgets = urwid.SimpleFocusListWalker([
+        self._keywords = Edit(caption='Keywords: ', edit_text=Rec.keywords, align='left', wrap='clip')
+        self._widgets = SimpleFocusListWalker([
             Header(Rec, mode_label),
-            urwid.Divider('-'),
-            urwid.Edit( caption='Keywords: ', edit_text=Rec.keywords, align='left', wrap='clip'),
-            urwid.Divider('-'),
-            urwid.Edit( edit_text=Rec.body, align='left', multiline=True, allow_tab=True),
+            Divider('-'),
+            Edit( edit_text=Rec.body, align='left', multiline=True, allow_tab=True)
         ])
-        super(Content, self).__init__(self.widgets)
+        super(Content, self).__init__(self._widgets)
+
+    def show_keywords(self):
+        if len(self._widgets) == 3:
+            # insert keywords widget so it is above divider
+            self._widgets.insert(1, self._keywords)
+
+    def hide_keywords(self):
+        if len(self._widgets) > 3:
+            # update stored keywords before removing them from view
+            self._keywords = self._widgets.pop(1)
 
     def __getitem__(self, item):
+        if item == 'keywords' and len(self._widgets) > 3:
+            # ensure that the _keywords returned reflect the most recent changes
+            self._keywords = self._widgets[1]
+
         accessible = {
-            'title':self.widgets[0].base_widget,
-            'keywords':self.widgets[2],
-            'body':self.widgets[4],
+            'header':self._widgets[0].base_widget,
+            'keywords':self._keywords,
+            'body':self._widgets[-1]
         }
         return accessible[item]
 
-class InfoText(urwid.Columns):
+class InfoFooter(Columns):
     def __init__(self):
         self.widgets = [
-            ('pack', urwid.AttrMap(urwid.Text('^X'), 'FTR_CMD')),
-            ('pack', urwid.AttrMap(urwid.Text(' Exit  '), 'INFO')),
-            ('pack', urwid.AttrMap(urwid.Text('i / ESC'), 'FTR_CMD')),
-            ('pack', urwid.AttrMap(urwid.Text(' Toggle Mode  '), 'INFO')),
+            ('pack', AttrMap(Text('^X'), 'FOOTER_INFO_A')),
+            ('pack', AttrMap(Text(' Exit  '), 'FOOTER_INFO_B')),
+            ('pack', AttrMap(Text('i / ESC'), 'FOOTER_INFO_A')),
+            ('pack', AttrMap(Text(' Toggle Mode  '), 'FOOTER_INFO_B')),
         ]
-        super(InfoText, self).__init__(self.widgets)
+        super(InfoFooter, self).__init__(self.widgets)
 
-class CmdEdit(urwid.Edit):
+class CmdFooter(Edit):
     def __init__(self):
-        super(CmdEdit, self).__init__(caption='> ')
-        pass
+        super(CmdFooter, self).__init__(caption='> ')
 
     def __getitem__(self, item):
         accessible = {
             'cmd':self.edit_text
         }
-        return accessible.setdefault(item, None)
+        return accessible[item]
 
 class Mode:
     """ Contains data that differs between interface modes and objects to trigger mode switching """
     def __init__(self, starting_label):
-        # label_widget_mirror mirrors the text in label_widget and updates in response to 'change' signal
-        #  emitted by label_widget to label_widget_mirror whenever label_widget is changed
-        self.label_widget = urwid.Edit(caption='Mode: ', edit_text=starting_label)
+        self.label = starting_label
         self.identifiers = ['COMMAND','INSERT']
         self.palettes = [
             [
-                # normal mode
-                ('HDR', 'white', 'black', 'bold'),
-                ('INFO', 'white', 'black', 'bold'),
-                ('FTR_CMD', 'dark gray', 'light gray', 'bold'),
-                ('MODE', 'white', 'black', 'bold'),
-                ('CMD', 'yellow', 'light green', 'bold')
+                # COMMAND mode
+                ('HEADER',     'white',     'black'),
+                ('FOOTER_CMD', 'dark cyan', 'black')
             ],
             [
-                # insert mode
-                ('HDR','white',      'dark magenta', 'bold'),
-                ('INFO','white',      'dark magenta', 'bold'),
-                ('FTR_CMD', 'dark gray', 'light gray', 'bold'),
-                ('NORMAL_MODE', 'dark gray', 'light gray', 'bold'),
-                ('CMD', 'yellow', 'light green', 'bold'),
+                # INSERT mode
+                ('HEADER',        'white',     'dark magenta'),
+                ('FOOTER_INFO_A', 'dark gray', 'light gray'),
+                ('FOOTER_INFO_B', 'white',     'dark magenta'),
             ]
         ]
         self.settings = deque(zip(self.identifiers, self.palettes))
 
         if starting_label in self.identifiers:
+            # rotate settings deque so ui initializes using mode specified by starting_label
             while self.settings[0][0] != starting_label:
                 self.settings.rotate(1)
 
-    def __getitem__(self, item):
-        accessible = {
-            'caption':self.label_widget.caption,
-            'label':self.label_widget.edit_text,
-            'text':self.label_widget.caption + self.label_widget.edit_text
-        }
-        return accessible[item]
-
-class TTY(urwid.Frame, urwid.curses_display.Screen):
+class TTY(Frame, urwid.curses_display.Screen):
     def __init__(self, Rec, starting_label):
-        self._content = Content(Rec, starting_label)
-        self._footer = urwid.Text('')
-        super(TTY, self).__init__(body=self._content, footer=self._footer)
+        super(TTY, self).__init__(body=Content(Rec, starting_label),
+                                  footer=WidgetPlaceholder(Edit('')))
 
         self.mode = Mode(starting_label)
         self._switcher = self._switch_generator()
@@ -110,8 +107,8 @@ class TTY(urwid.Frame, urwid.curses_display.Screen):
 
     def __getitem__(self, item):
         accessible = {
-            'content':self._content.base_widget,
-            'footer':self._footer
+            'content':self.body.base_widget,
+            'footer':self.footer
         }
         return accessible[item]
 
@@ -121,16 +118,20 @@ class TTY(urwid.Frame, urwid.curses_display.Screen):
 
     def _switch_generator(self):
         """ Infinite circular iterator used to flip back and forth between modes """
+        # swap same objects in and out of footer so their values are preserved between swaps
+        cmd_footer, info_footer = CmdFooter(), InfoFooter()
+
         for label, palette in itertools.cycle(self.mode.settings):
+            self.mode.label = label
             self.register_palette( palette )
-            self.mode.label_widget.set_edit_text( label )
-            self.body['title']['mode_label'].set_text(label)
+            self.body['header']['mode'].set_text(label)
 
             if label == 'COMMAND':
-                self.footer = urwid.AttrMap(CmdEdit(), attr_map='CMD')
+                self.body.base_widget.hide_keywords()
+                self.footer.original_widget = AttrMap(cmd_footer, attr_map='FOOTER_CMD')
             elif label == 'INSERT':
-                self.footer = urwid.AttrMap(InfoText(), attr_map='INFO')
-
+                self.body.base_widget.show_keywords()
+                self.footer.original_widget = AttrMap(info_footer, attr_map='FOOTER_INFO_B')
             yield
 
 class UI:
@@ -140,7 +141,6 @@ class UI:
 
         self.tty = TTY(Rec, 'COMMAND')
         self.starting_values = Rec.dump()
-
         self.tty.run_wrapper( self._run )
 
     def altered(self):
@@ -151,7 +151,7 @@ class UI:
         self._force_exit = True
 
     def dump(self):
-        return { 'title':self.tty['content']['title']['title'].edit_text, ## RENAME ACCESS PATHS TO HEADER TEXT
+        return { 'title':self.tty['content']['header']['title'].edit_text,
                  'keywords':self.tty['content']['keywords'].edit_text,
                  'body':self.tty['content']['body'].edit_text }
 
@@ -178,27 +178,23 @@ class UI:
                     [setattr(self, key, value) for key, value in self.dump().items()]
                     return
 
-                elif self.tty.mode['label'] == 'INSERT':
+                elif self.tty.mode.label == 'INSERT':
                     if k == 'esc':
                         self.tty.switch_mode()
                     else:
                         self.tty.keypress( size, k )
 
-                elif self.tty.mode['label'] == 'COMMAND':
+                elif self.tty.mode.label == 'COMMAND':
                     if k in ['a','A','i','I','o','O']:
                         self.tty.switch_mode()
-                    # if user tries to scroll when focus is on command widget, change focus
-                    #   to the body and send up / down keypress. Focus immediately returned
-                    #   to command widget when awaiting next keypress
-                    elif k in ['up', 'down']:
-                        self.tty.set_focus('body')
+
+                    # allow scrolling of body text when not in INSERT mode
+                    elif k == 'up' or k == 'down' and self.tty.focus_position == 'body':
                         self.tty.keypress(size, k)
                     else:
+                        # send keypress to footer cmd input
                         self.tty['footer'].keypress((1, ), k)
 
-# TODO see if possible to assign header to Frame.header and still move between it and the body sections
-# TODO make braced access calls [] consistent
-# TODO necessary to have header/footer color change if mode label and bottom status already changing ?
-# TODO fix header so mode label is right aligned. no need to fix coloring if i remove color changes
+
 # TODO disable body Edit widgets and see if still able to copy/paste when in command mode
-# TODO make COMMAND entry default to highlight search body text
+# TODO make COMMAND input entries default to highlighting matching body text
