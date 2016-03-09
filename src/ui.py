@@ -56,7 +56,7 @@ class InfoFooter(Columns):
         self.widgets = [
             ('pack', AttrMap(Text('^X'), 'FOOTER_INFO_A')),
             ('pack', AttrMap(Text(' Exit  '), 'FOOTER_INFO_B')),
-            ('pack', AttrMap(Text('i / ESC'), 'FOOTER_INFO_A')),
+            ('pack', AttrMap(Text('ESC'), 'FOOTER_INFO_A')),
             ('pack', AttrMap(Text(' Toggle Mode  '), 'FOOTER_INFO_B')),
         ]
         super(InfoFooter, self).__init__(self.widgets)
@@ -64,12 +64,25 @@ class InfoFooter(Columns):
 class CmdFooter(Edit):
     def __init__(self):
         super(CmdFooter, self).__init__(caption='> ')
+        self.clear_before_keypress = False
 
     def __getitem__(self, item):
         accessible = {
             'cmd':self.edit_text
         }
         return accessible[item]
+
+    def kpi(self, size, key):
+        """
+        keypress intermediary
+        If an invalid entry was made, clear_before_keypress will be set to True
+          and 'Invalid entry' notification will be current edit_text. Clear
+          notification and reset flag before sending keys to keypress
+        """
+        if self.clear_before_keypress:
+            self.set_edit_text('')
+            self.clear_before_keypress = False
+        self.keypress(size, key)
 
 class Mode:
     """ Contains data that differs between interface modes and objects to trigger mode switching """
@@ -147,6 +160,23 @@ class UI:
         """ Returns True if any values in Rec have been changed """
         return self.starting_values != self.dump()
 
+    def cmd_eval(self, size):
+        """ Evaluates entries in cmd_footer """
+        cmd = self.tty.footer.base_widget.edit_text
+        self.tty.footer.base_widget.set_edit_text('')
+
+        if cmd == ':q' or cmd == ':quit':
+            [setattr(self, key, value) for key, value in self.dump().items()]
+            return 0
+        elif cmd == ':i' or cmd == ':insert':
+            self.tty.switch_mode()
+        else:
+            if cmd == ':help':
+                self.tty.footer.base_widget.set_edit_text('(:i)nsert, (:q)uit')
+            else:
+                self.tty.footer.base_widget.set_edit_text('Invalid command')
+            self.tty.footer.base_widget.clear_before_keypress = True
+
     def ctrl_c_handler(self, sig, frame):
         self._force_exit = True
 
@@ -185,16 +215,19 @@ class UI:
                         self.tty.keypress( size, k )
 
                 elif self.tty.mode.label == 'COMMAND':
-                    if k in ['a','A','i','I','o','O']:
-                        self.tty.switch_mode()
+                    if k == 'enter':
+                        eval_res = self.cmd_eval(size)
+                        if  eval_res is None:
+                            continue
+                        elif eval_res == 0:
+                            return
 
                     # allow scrolling of body text when not in INSERT mode
                     elif k == 'up' or k == 'down' and self.tty.focus_position == 'body':
                         self.tty.keypress(size, k)
                     else:
                         # send keypress to footer cmd input
-                        self.tty['footer'].keypress((1, ), k)
-
+                        self.tty.footer.base_widget.kpi((1, ), k)
 
 # TODO disable body Edit widgets and see if still able to copy/paste when in command mode
 # TODO make COMMAND input entries default to highlighting matching body text
