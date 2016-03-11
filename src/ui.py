@@ -170,6 +170,8 @@ class UI:
             return 0
         elif cmd == ':i' or cmd == ':insert':
             self.tty.switch_mode()
+        elif cmd == ':n':
+            self.tty.body.base_widget.goto_str(size, cmd[2:])
         else:
             if cmd == ':help':
                 self.tty.footer.base_widget.set_edit_text('(:i)nsert, (:q)uit')
@@ -208,6 +210,9 @@ class UI:
                     [setattr(self, key, value) for key, value in self.dump().items()]
                     return
 
+                elif k == 'ctrl l':
+                    self.tty.footer.base_widget.set_edit_text('')
+
                 elif self.tty.mode.label == 'INSERT':
                     if k == 'esc':
                         self.tty.switch_mode()
@@ -228,6 +233,3 @@ class UI:
                     else:
                         # send keypress to footer cmd input
                         self.tty.footer.base_widget.kpi((1, ), k)
-
-# TODO disable body Edit widgets and see if still able to copy/paste when in command mode
-# TODO make COMMAND input entries default to highlighting matching body text
