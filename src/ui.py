@@ -5,6 +5,8 @@ import itertools
 import signal
 
 class Header(Columns):
+    """ Contains widgets for header elements (used in Content class) which include
+        the title of the record and the label displaying the current ui mode """
     def __init__(self, Rec, mode_label):
         self.widgets = [
             (AttrMap(Text(mode_label, align='left'), 'HEADER')),
@@ -20,6 +22,12 @@ class Header(Columns):
         return accessible[item]
 
 class Content(ListBox):
+    """ Contains widgets containing mutable record data elements which include
+        the header, keywords, and body widgets. Widgets are stored in ListBox
+        at the following indicies: 0:header 1: horizontal divider 2:body. Note - body is
+        at index 1 when mode=COMMAND and 2 when mode=INSERT as keyword widget
+        is inserted at and removed from index 1 to simulate showing/hiding when
+        switching between modes """
     def __init__(self, Rec, mode_label):
         self._keywords = Edit(caption='Keywords: ', edit_text=Rec.keywords, align='left', wrap='clip')
         self._widgets = SimpleFocusListWalker([
@@ -35,6 +43,7 @@ class Content(ListBox):
             self._widgets.insert(1, self._keywords)
 
     def hide_keywords(self):
+        """ Removes keywords widget from Content ListBox which is at index 1 """
         if len(self._widgets) > 3:
             # update stored keywords before removing them from view
             self._keywords = self._widgets.pop(1)
@@ -52,6 +61,7 @@ class Content(ListBox):
         return accessible[item]
 
 class InfoFooter(Columns):
+    """ Footer class used when ui is in INSERT mode - displays keyboard shortcuts """
     def __init__(self):
         self.widgets = [
             ('pack', AttrMap(Text('^X'), 'FOOTER_INFO_A')),
@@ -62,6 +72,7 @@ class InfoFooter(Columns):
         super(InfoFooter, self).__init__(self.widgets)
 
 class CmdFooter(Edit):
+    """ Footer class used when ui is in COMMAND mode - provides a command entry field """
     def __init__(self):
         super(CmdFooter, self).__init__(caption='> ')
         self.clear_before_keypress = False
@@ -110,9 +121,9 @@ class Mode:
                 self.settings.rotate(1)
 
 class TTY(Frame, urwid.curses_display.Screen):
+    """ Facilitates core UI functionality by serving as base screen that all other widgets are placed """
     def __init__(self, Rec, starting_label):
-        super(TTY, self).__init__(body=Content(Rec, starting_label),
-                                  footer=WidgetPlaceholder(Edit('')))
+        super(TTY, self).__init__(body=Content(Rec, starting_label), footer=WidgetPlaceholder(Edit('')))
 
         self.mode = Mode(starting_label)
         self._switcher = self._switch_generator()
@@ -148,6 +159,7 @@ class TTY(Frame, urwid.curses_display.Screen):
             yield
 
 class UI:
+    """ User facing class to launch command line interface when initialized """
     def __init__(self, Rec):
         signal.signal(signal.SIGINT, self.ctrl_c_handler)
         self._force_exit = False
@@ -180,9 +192,12 @@ class UI:
             self.tty.footer.base_widget.clear_before_keypress = True
 
     def ctrl_c_handler(self, sig, frame):
+        """ Callback to set flag when ctrl-c is entered. When flag is set, current record is updated before
+            exiting out of the ui """
         self._force_exit = True
 
     def dump(self):
+        """ Used to retrieve record elements relevant to record data members """
         return { 'title':self.tty['content']['header']['title'].edit_text,
                  'keywords':self.tty['content']['keywords'].edit_text,
                  'body':self.tty['content']['body'].edit_text }
