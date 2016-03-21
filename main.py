@@ -34,8 +34,8 @@ class Memfog:
     def create_rec(self):
         Rec = Record()
 
-        # construct Record from data entered into UI
-        Gui = ui.UI(Rec)
+        # construct Record from data entered into UI. Start UI in INSERT mode since a new record is being created
+        Gui = ui.UI(Rec, 'INSERT')
 
         if Gui.altered():
             [setattr(Rec, k, v) for k,v in Gui.dump().items()]

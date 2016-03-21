@@ -159,12 +159,14 @@ class TTY(Frame, urwid.curses_display.Screen):
             yield
 
 class UI:
-    """ User facing class to launch command line interface when initialized """
-    def __init__(self, Rec):
+    """ User facing class to launch command line interface when initialized. Initialization
+        defaults to COMMAND mode unless a new record is being created in which UI is set to
+        INSERT mode """
+    def __init__(self, Rec, start_mode='COMMAND'):
         signal.signal(signal.SIGINT, self.ctrl_c_handler)
         self._force_exit = False
 
-        self.tty = TTY(Rec, 'COMMAND')
+        self.tty = TTY(Rec, start_mode)
         self.starting_values = Rec.dump()
         self.tty.run_wrapper( self._run )
 
