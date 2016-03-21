@@ -32,6 +32,8 @@ class Memfog:
         self.RecLink = link.Link()
 
     def create_rec(self):
+        """ Initializes a new Record object which is passed to the command line interface. The empty Record's
+        data members are then be set according to the user's text input """
         Rec = Record()
 
         # construct Record from data entered into UI. Start UI in INSERT mode since a new record is being created
@@ -44,6 +46,8 @@ class Memfog:
     def display_rec(self, user_keywords):
         """
         :type user_keywords: str
+        Initializes command line interface with user selected Record. Data members in Record are used to
+        populate the UI widget fields with text prior to displaying them on screen
         """
         while True:
             try:
@@ -71,6 +75,7 @@ class Memfog:
         :type Rec_fuzz_matches: list of Record objects
         :type action_description: str
         :returns: Record object or None
+        Prints record titles in descending order by their match percentage to the users keyword input
         """
         if len(self.Records) > 0:
             print('{} which record?'.format(action_description))
@@ -91,6 +96,7 @@ class Memfog:
     def export_recs(self, export_dp):
         """
         :type export_dp: str
+        Exports a json file of all records in database to directory at path dp
         """
         if export_dp is None or not os.path.exists(export_dp):
             export_dp = os.getcwd()
@@ -110,6 +116,8 @@ class Memfog:
         """
         :type user_input: str
         :returns: top_n Records from self.records sorted by Record.search_score in ascending order
+        Takes a set of string for each record from the header and keywords and uses the set to
+        perform fuzzy string matching to calculate match percentage to the user_input keywords
         """
         user_search_str = ''.join(unique_everseen(util.standardize(user_input)))
 
@@ -117,13 +125,14 @@ class Memfog:
             word_set = Rec.make_set()
             word_set.difference_update(self.excluded_words)
             word_str = ' '.join(word_set)
-            Rec.search_score = fuzz.token_set_ratio(word_str, user_search_str)
+            Rec.search_score = fuzz.ratio(word_str, user_search_str)
 
         return [*sorted(self.Records.values())][-self.config.top_n::]
 
     def import_recs(self, fp):
         """
         :type fp: str
+        Imports record from a json file located at fp by individually inserting them into the database
         """
         imported_records = file_io.json_from_file(fp)
         skipped_imports = 0
@@ -147,6 +156,7 @@ class Memfog:
     def remove_rec(self, user_input):
         """
         :type user_input: str
+        Displays records matching user input and removes the selected record from database
         """
         while True:
             Rec_fuzz_matches = self._fuzzy_match(user_input)
@@ -160,6 +170,7 @@ class Memfog:
                 break
 
 class Config:
+    """ Contains application configuration settings """
     def __init__(self, argv):
         self.repo_dp = os.path.dirname(os.path.realpath(__file__))
         self.datadir_fp = self.repo_dp + '/datadir'
