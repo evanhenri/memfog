@@ -222,5 +222,5 @@ def main(argv):
         print('No memories exist')
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.6.1')
+    args = docopt(__doc__, version='memfog v1.6.2')
     main(args)
