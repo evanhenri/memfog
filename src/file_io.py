@@ -7,6 +7,7 @@ def delete_file(fp):
     """
     :type fp: str
     """
+    fp = os.path.expanduser(fp)
     try:
         if file_sys.file_exists(fp):
             os.remove(fp)
@@ -17,6 +18,7 @@ def json_from_file(fp):
     """
     :type fp: str
     """
+    fp = os.path.expanduser(fp)
     try:
         if file_sys.file_exists(fp):
             with open(fp, 'r') as f:
@@ -30,10 +32,10 @@ def json_to_file(fp, content):
     :type fp: str
     :type content: json encodable obj
     """
+    fp = os.path.expanduser(fp)
     try:
         with open(fp, 'w') as f:
             json.dump(content, f, indent=4)
-        print('Saved {}'.format(fp))
     except Exception as e:
         print('Error occured while writing json to {}\n{}'.format(fp, e.args))
 
@@ -42,6 +44,7 @@ def set_from_file(fp):
     :type fp: str
     :returns: contents of file at file_path where each line is an element in returned set
     """
+    fp = os.path.expanduser(fp)
     try:
         if file_sys.file_exists(fp):
             with open(fp, 'r') as f:
@@ -55,6 +58,7 @@ def str_from_file(fp):
     :type fp: str
     :returns: contents of file at file_path as string
     """
+    fp = os.path.expanduser(fp)
     try:
         if file_sys.file_exists(fp):
             with open(fp, 'r') as f:
@@ -68,6 +72,7 @@ def str_to_file(fp, content):
     :type fp: str
     :type content: str
     """
+    fp = os.path.expanduser(fp)
     try:
         with open(fp, 'w') as f:
             f.write(content)
