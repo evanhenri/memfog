@@ -1,4 +1,7 @@
 import os
+from collections import deque
+from itertools import chain
+
 
 def file_exists(fp):
     """
@@ -31,17 +34,51 @@ def init_file(fp):
     except Exception as e:
         print('Error occured while making file {}\n{}'.format(fp, e.args))
 
-def validate_dir_path(input_dp, default_dp):
+def check_path(mode='r', *input_paths):
     """
-    :type input_dp: str
-    :type default_dp: str
-    Attempts to resolve path to directory at input_path. Returns default_dir_path if unable to resolve
+    :type input_paths: list of strings
+    :type mode: char
+    Returns Trye/False depending on if using mode on input_path is valid
     """
-    if input_dp[-1] == '/':
-        if os.path.isdir(input_dp):
-            return input_dp
-    if os.path.isdir(input_dp + '/'):
-        return input_dp + '/'
-    elif default_dp[-1] == '/':
-        return default_dp
-    return default_dp + '/'
+    expanded_elements = map(os.path.expanduser, chain(input_paths))
+    merged_elements = '/'.join(expanded_elements)
+    split_elements = merged_elements.split('/')
+    path_elements = deque(split_elements)
+    partial_path = ''
+
+    # iteratively reconstruct path until first instance when invalid path is found
+    while len(path_elements) > 0:
+        element = path_elements.popleft()
+        tmp_path = partial_path + '/' + element
+        if len(element) > 0:
+            if os.path.isdir(tmp_path) or os.path.isfile(tmp_path):
+                partial_path += '/' + element
+            else:
+                path_elements.appendleft(element)
+                break
+
+    if mode.startswith('r'):
+        if os.path.isfile(partial_path) and os.access(partial_path, os.R_OK):
+            return True
+        return False
+
+    if mode.startswith('w'):
+        if os.access(partial_path, os.W_OK):
+            # One item will exist in the deque if it is the file / dir name that is pending creation
+            # If partial path already exists as a file, then it is possible to overwrite it
+            if len(path_elements) == 1 or os.path.isfile(partial_path):
+                return True
+        return False
+
+    if mode.startswith('a'):
+        if os.path.isfile(partial_path) and os.access(partial_path, os.W_OK):
+            return True
+        return False
+
+    if mode.startswith('x'):
+        if os.path.isfile(partial_path) and os.access(partial_path, os.X_OK):
+            return True
+        return False
+
+
+
