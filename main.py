@@ -93,24 +93,35 @@ class Memfog:
         else:
             print('No records exist')
 
-    def export_recs(self, export_dp):
+    def export_recs(self, export_path):
         """
-        :type export_dp: str
+        :type export_path: str
         Exports a json file of all records in database to directory at path dp
         """
-        if export_dp is None or not os.path.exists(export_dp):
-            export_dp = os.getcwd()
-
         date = datetime.datetime.now()
-        export_dp = file_sys.validate_dir_path(export_dp, os.getcwd())
-        export_fp = export_dp + 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
+        default_filename = 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
+        target_path = os.getcwd() + '/' + default_filename
 
-        if os.path.isfile(export_fp):
-            if not user.prompt_yn('Overwrite existing file {}'.format(export_fp)):
+        if export_path is None:
+            export_path = target_path
+
+        # check if path to file pending export has been included in export_path
+        if file_sys.check_path('w', export_path):
+            target_path = export_path
+        # check if path to directory to export into has been included in export_path
+        else:
+            if not export_path.endswith('/'):
+                export_path += '/'
+            if file_sys.check_path('w', export_path, default_filename):
+                target_path = export_path + default_filename
+
+        if os.path.exists(target_path):
+            if not user.prompt_yn('Overwrite existing file {}'.format(target_path)):
                 return
 
         rec_backups = [ Rec.dump() for Rec in self.Records.values() ]
-        file_io.json_to_file(export_fp, rec_backups)
+        file_io.json_to_file(target_path, rec_backups)
+        print('Exported to ' + target_path)
 
     def _fuzzy_match(self, user_input):
         """

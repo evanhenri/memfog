@@ -1,8 +1,13 @@
 from urwid import AttrMap, Columns, Divider, Edit, Frame, ListBox, Text, SimpleFocusListWalker, WidgetPlaceholder
 import urwid.curses_display
 from collections import deque
+from enum import Enum
 import itertools
 import signal
+import os
+import re
+
+from . import file_io, file_sys
 
 class Header(Columns):
     """ Contains widgets for header elements (used in Content class) which include
@@ -71,11 +76,20 @@ class InfoFooter(Columns):
         ]
         super(InfoFooter, self).__init__(self.widgets)
 
+class CmdAction(Enum):
+    """ Contains enumerated meanings to outcomes certain cmd input entries whose action
+     cannot be called from the CmdFooter class """
+    QUIT = 0
+    SWITCHMODE = 1
+    EXPORT = 2
+
 class CmdFooter(Edit):
     """ Footer class used when ui is in COMMAND mode - provides a command entry field """
     def __init__(self):
         super(CmdFooter, self).__init__(caption='> ')
         self.clear_before_keypress = False
+        # extract :<command> substring from cmd field
+        self._pattern = re.compile('(:.\S*)')
 
     def __getitem__(self, item):
         accessible = {
@@ -94,6 +108,40 @@ class CmdFooter(Edit):
             self.set_edit_text('')
             self.clear_before_keypress = False
         self.keypress(size, key)
+
+    def cmd_eval(self, size):
+        """
+        :returns a tuple as (flag to trigger call to action, field to hold text entry widget text)
+        :returns None if the text in cmd footer does not match any available command
+        Evaluates cmd footer text entries.
+        """
+        input_text = self.edit_text
+        self.set_edit_text('')
+
+        # extract :command pattern from cmd input field
+        cmd = self._pattern.search(input_text).group(0)
+
+        if cmd == ':i' or cmd == ':insert':
+            return CmdAction.SWITCHMODE, 1
+
+        # flag to indicate cmd input field should get cleared before inserting new characters
+        self.clear_before_keypress = True
+        args = input_text.split(' ', 1)[-1].strip()
+
+        # if no export path was provided
+        if args.startswith(cmd): args = os.getcwd()
+
+        if cmd == ':e' or cmd == ':export':
+            return CmdAction.EXPORT, args
+
+        elif cmd == ':h' or cmd == ':help':
+            self.set_edit_text('(:i)nsert, (:q)uit')
+
+        elif cmd == ':q' or cmd == ':quit':
+            return CmdAction.QUIT, 0
+
+        else:
+            self.set_edit_text('Invalid command')
 
 class Mode:
     """ Contains data that differs between interface modes and objects to trigger mode switching """
@@ -159,13 +207,12 @@ class TTY(Frame, urwid.curses_display.Screen):
             yield
 
 class UI:
-    """ User facing class to launch command line interface when initialized. Initialization
+    """ User facing class to launch command line interface. Initialization
         defaults to COMMAND mode unless a new record is being created in which UI is set to
         INSERT mode """
     def __init__(self, Rec, start_mode='COMMAND'):
         signal.signal(signal.SIGINT, self.ctrl_c_handler)
         self._force_exit = False
-
         self.tty = TTY(Rec, start_mode)
         self.starting_values = Rec.dump()
         self.tty.run_wrapper( self._run )
@@ -173,25 +220,6 @@ class UI:
     def altered(self):
         """ Returns True if any values in Rec have been changed """
         return self.starting_values != self.dump()
-
-    def cmd_eval(self, size):
-        """ Evaluates entries in cmd_footer """
-        cmd = self.tty.footer.base_widget.edit_text
-        self.tty.footer.base_widget.set_edit_text('')
-
-        if cmd == ':q' or cmd == ':quit':
-            [setattr(self, key, value) for key, value in self.dump().items()]
-            return 0
-        elif cmd == ':i' or cmd == ':insert':
-            self.tty.switch_mode()
-        elif cmd == ':n':
-            self.tty.body.base_widget.goto_str(size, cmd[2:])
-        else:
-            if cmd == ':help':
-                self.tty.footer.base_widget.set_edit_text('(:i)nsert, (:q)uit')
-            else:
-                self.tty.footer.base_widget.set_edit_text('Invalid command')
-            self.tty.footer.base_widget.clear_before_keypress = True
 
     def ctrl_c_handler(self, sig, frame):
         """ Callback to set flag when ctrl-c is entered. When flag is set, current record is updated before
@@ -203,6 +231,25 @@ class UI:
         return { 'title':self.tty['content']['header']['title'].edit_text,
                  'keywords':self.tty['content']['keywords'].edit_text,
                  'body':self.tty['content']['body'].edit_text }
+
+    def _export_to_file(self, export_path):
+        [setattr(self, key, value) for key, value in self.dump().items()]
+        default_filename = getattr(self, 'title').replace(' ', '_')
+        target_path = os.getcwd() + '/' + default_filename
+
+        # check if path to file pending export has been included in export_path
+        if file_sys.check_path('w', export_path):
+            target_path = export_path
+
+        # check if path to directory to export into has been included in export_path
+        else:
+            if not export_path.endswith('/'):
+                export_path += '/'
+            if file_sys.check_path('w', export_path, default_filename):
+                target_path = export_path + default_filename
+
+        file_io.json_to_file(target_path, self.dump())
+        self.tty.footer.base_widget.set_edit_text('Exported to ' + target_path)
 
     def _run(self):
         size = self.tty.get_cols_rows()
@@ -238,11 +285,20 @@ class UI:
 
                 elif self.tty.mode.label == 'COMMAND':
                     if k == 'enter':
-                        eval_res = self.cmd_eval(size)
+                        eval_res = self.tty.footer.base_widget.cmd_eval(size)
+                        # if nothing is returned because no action is required
                         if  eval_res is None:
                             continue
-                        elif eval_res == 0:
+
+                        elif eval_res[0] == CmdAction.QUIT:
+                            [setattr(self, key, value) for key, value in self.dump().items()]
                             return
+
+                        elif eval_res[0] == CmdAction.SWITCHMODE:
+                            self.tty.switch_mode()
+
+                        elif eval_res[0] == CmdAction.EXPORT:
+                            self._export_to_file(eval_res[1])
 
                     # allow scrolling of body text when not in INSERT mode
                     elif k == 'up' or k == 'down' and self.tty.focus_position == 'body':
