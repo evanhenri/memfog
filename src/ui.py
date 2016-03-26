@@ -129,7 +129,8 @@ class CmdFooter(Edit):
         args = input_text.split(' ', 1)[-1].strip()
 
         # if no export path was provided
-        if args.startswith(cmd): args = os.getcwd()
+        if args.startswith(cmd):
+            args = os.getcwd()
 
         if cmd == ':e' or cmd == ':export':
             return CmdAction.EXPORT, args
@@ -142,6 +143,9 @@ class CmdFooter(Edit):
 
         else:
             self.set_edit_text('Invalid command')
+
+    def empty(self):
+        return len(self.edit_text) == 0
 
 class Mode:
     """ Contains data that differs between interface modes and objects to trigger mode switching """
@@ -284,7 +288,7 @@ class UI:
                         self.tty.keypress( size, k )
 
                 elif self.tty.mode.label == 'COMMAND':
-                    if k == 'enter':
+                    if k == 'enter' and not self.tty.footer.base_widget.empty():
                         eval_res = self.tty.footer.base_widget.cmd_eval(size)
                         # if nothing is returned because no action is required
                         if  eval_res is None:
