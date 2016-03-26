@@ -130,13 +130,14 @@ class Memfog:
         Takes a set of string for each record from the header and keywords and uses the set to
         perform fuzzy string matching to calculate match percentage to the user_input keywords
         """
-        user_search_str = ''.join(unique_everseen(util.standardize(user_input)))
+        user_keywords = ''.join(unique_everseen(util.standardize(user_input)))
 
         for Rec in self.Records.values():
-            word_set = Rec.make_set()
-            word_set.difference_update(self.excluded_words)
-            word_str = ' '.join(word_set)
-            Rec.search_score = fuzz.ratio(word_str, user_search_str)
+            keyword_set = Rec.make_set()
+            keyword_set.difference_update(self.excluded_words)
+            keywords = ' '.join(keyword_set)
+            score = (fuzz.token_sort_ratio(keywords, user_keywords) + fuzz.token_set_ratio(keywords, user_keywords)) / 2
+            Rec.search_score = score
 
         return [*sorted(self.Records.values())][-self.config.top_n::]
 
