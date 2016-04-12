@@ -8,6 +8,8 @@ import os
 import re
 
 from . import file_io, file_sys
+from .util import BidirectionCircularList
+
 
 class Header(Columns):
     """ Contains widgets for header elements (used in Content class) which include
@@ -25,6 +27,7 @@ class Header(Columns):
             'title':self.widgets[-1].base_widget
         }
         return accessible[item]
+
 
 class Content(ListBox):
     """ Contains widgets containing mutable record data elements which include
@@ -65,6 +68,7 @@ class Content(ListBox):
         }
         return accessible[item]
 
+
 class InfoFooter(Columns):
     """ Footer class used when ui is in INSERT mode - displays keyboard shortcuts """
     def __init__(self):
@@ -75,6 +79,7 @@ class InfoFooter(Columns):
             ('pack', AttrMap(Text(' Toggle Mode  '), 'FOOTER_INFO_B')),
         ]
         super(InfoFooter, self).__init__(self.widgets)
+
 
 class CmdAction(Enum):
     """ Contains enumerated meanings to outcomes certain cmd input entries whose action
@@ -90,6 +95,7 @@ class CmdFooter(Edit):
         self.clear_before_keypress = False
         # extract :<command> substring from cmd field
         self._pattern = re.compile('(:.\S*)')
+        self._history = BidirectionCircularList()
 
     def __getitem__(self, item):
         accessible = {
@@ -115,8 +121,8 @@ class CmdFooter(Edit):
         :returns None if the text in cmd footer does not match any available command
         Evaluates cmd footer text entries.
         """
-        #self.set_edit_text('')
         cmd_text = self.edit_text
+        self._history.append(cmd_text)
 
         # extract :command pattern from cmd input field
         cmd = self._pattern.search(cmd_text)
@@ -139,17 +145,24 @@ class CmdFooter(Edit):
             elif cmd == ':q' or cmd == ':quit':
                 result = CmdAction.QUIT, 0
 
-            # cmd input field should be cleared before next user key stroke gets displayed
-            self.clear_before_keypress = True
+        # cmd input field should be cleared before next user key stroke gets displayed
+        self.clear_before_keypress = True
 
-            if cmd in valid_cmd:
-                return result
+        if cmd in valid_cmd:
+            return result
+
         self.set_edit_text('Invalid command')
-
-
 
     def empty(self):
         return len(self.edit_text) == 0
+
+    def scroll_history_up(self):
+        if len(self._history) > 0:
+            self.set_edit_text(self._history.next())
+
+    def scroll_history_down(self):
+        if len(self._history) > 0:
+            self.set_edit_text(self._history.prev())
 
 class Mode:
     """ Contains data that differs between interface modes and objects to trigger mode switching """
@@ -175,6 +188,7 @@ class Mode:
             # rotate settings deque so ui initializes using mode specified by starting_label
             while self.settings[0][0] != starting_label:
                 self.settings.rotate(1)
+
 
 class TTY(Frame, urwid.curses_display.Screen):
     """ Facilitates core UI functionality by serving as base screen that all other widgets are placed """
@@ -213,6 +227,7 @@ class TTY(Frame, urwid.curses_display.Screen):
                 self.body.base_widget.show_keywords()
                 self.footer.original_widget = AttrMap(info_footer, attr_map='FOOTER_INFO_B')
             yield
+
 
 class UI:
     """ User facing class to launch command line interface. Initialization
@@ -308,8 +323,11 @@ class UI:
                         elif eval_res[0] == CmdAction.EXPORT:
                             self._export_to_file(eval_res[1])
 
-                    # allow scrolling of body text when not in INSERT mode
-                    elif k == 'up' or k == 'down' and self.tty.focus_position == 'body':
+                    elif k == 'up':
+                        self.tty.footer.base_widget.scroll_history_up()
+                    elif k == 'down':
+                        self.tty.footer.base_widget.scroll_history_down()
+                    elif 'page' in k and self.tty.focus_position == 'body':
                         self.tty.keypress(size, k)
                     else:
                         # send keypress to footer cmd input
