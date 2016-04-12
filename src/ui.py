@@ -115,34 +115,38 @@ class CmdFooter(Edit):
         :returns None if the text in cmd footer does not match any available command
         Evaluates cmd footer text entries.
         """
-        input_text = self.edit_text
-        self.set_edit_text('')
+        #self.set_edit_text('')
+        cmd_text = self.edit_text
 
         # extract :command pattern from cmd input field
-        cmd = self._pattern.search(input_text).group(0)
+        cmd = self._pattern.search(cmd_text)
+        result = None
+        valid_cmd = {':i', ':insert', ':e', ':export', ':h', ':help', ':q', ':quit'}
 
-        if cmd == ':i' or cmd == ':insert':
-            return CmdAction.SWITCHMODE, 1
+        if cmd is not None:
+            cmd = cmd.group(0)
+            args = cmd_text.split(' ', 1)[-1].strip()
 
-        # flag to indicate cmd input field should get cleared before inserting new characters
-        self.clear_before_keypress = True
-        args = input_text.split(' ', 1)[-1].strip()
+            if cmd == ':i' or cmd == ':insert':
+                result = CmdAction.SWITCHMODE, 1
+            elif cmd == ':e' or cmd == ':export':
+                # if no export path follows export command - no space to split on
+                if args.startswith(cmd): args = os.getcwd()
+                self.set_edit_text('Exported to {}'.format(args))
+                result = CmdAction.EXPORT, args
+            elif cmd == ':h' or cmd == ':help':
+                self.set_edit_text('(:i)nsert, (:q)uit')
+            elif cmd == ':q' or cmd == ':quit':
+                result = CmdAction.QUIT, 0
 
-        # if no export path was provided
-        if args.startswith(cmd):
-            args = os.getcwd()
+            # cmd input field should be cleared before next user key stroke gets displayed
+            self.clear_before_keypress = True
 
-        if cmd == ':e' or cmd == ':export':
-            return CmdAction.EXPORT, args
+            if cmd in valid_cmd:
+                return result
+        self.set_edit_text('Invalid command')
 
-        elif cmd == ':h' or cmd == ':help':
-            self.set_edit_text('(:i)nsert, (:q)uit')
 
-        elif cmd == ':q' or cmd == ':quit':
-            return CmdAction.QUIT, 0
-
-        else:
-            self.set_edit_text('Invalid command')
 
     def empty(self):
         return len(self.edit_text) == 0
