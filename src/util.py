@@ -35,3 +35,30 @@ def standardize(s):
     """
     stripped = strip_punctuation(s).lower()
     return shlex.shlex(stripped)
+
+class BidirectionCircularList(list):
+    """
+    built-in list() wrapper with circular next and prev functionality
+    """
+    def __init__(self, lst=[]):
+        super(BidirectionCircularList, self).__init__(lst)
+        self._index = 0
+
+    def next(self):
+        self._index += 1
+        try:
+            return self[self._index]
+        except IndexError:
+            self._index = 0
+            return self[self._index]
+
+    def prev(self):
+        self._index -= 1
+        try:
+            return self[self._index]
+        except IndexError:
+            self._index = len(self)-1
+            return self[self._index]
+
+
+
