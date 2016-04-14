@@ -36,29 +36,30 @@ def standardize(s):
     stripped = strip_punctuation(s).lower()
     return shlex.shlex(stripped)
 
-class BidirectionCircularList(list):
+class BidirectionScrollList(list):
     """
-    built-in list() wrapper with circular next and prev functionality
+    built-in list() wrapper with next and prev functionality
     """
     def __init__(self, lst=[]):
-        super(BidirectionCircularList, self).__init__(lst)
-        self._index = 0
+        super(BidirectionScrollList, self).__init__(lst)
+        self._index = len(lst)
+
+    def append(self, p_object):
+        # prev returns most recent item if prev is called after append
+        self._index += 1
+        super(BidirectionScrollList, self).append(p_object)
 
     def next(self):
-        self._index += 1
-        try:
+        if self._index < len(self)-1:
+            self._index += 1
             return self[self._index]
-        except IndexError:
-            self._index = 0
-            return self[self._index]
+        return None
 
     def prev(self):
-        self._index -= 1
-        try:
+        if self._index > 0:
+            self._index -= 1
             return self[self._index]
-        except IndexError:
-            self._index = len(self)-1
-            return self[self._index]
+        return None
 
 
 

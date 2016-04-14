@@ -8,7 +8,7 @@ import os
 import re
 
 from . import file_io, file_sys
-from .util import BidirectionCircularList
+from .util import BidirectionScrollList
 
 
 class Header(Columns):
@@ -95,7 +95,7 @@ class CmdFooter(Edit):
         self.clear_before_keypress = False
         # extract :<command> substring from cmd field
         self._pattern = re.compile('(:.\S*)')
-        self._history = BidirectionCircularList()
+        self._history = BidirectionScrollList()
 
     def __getitem__(self, item):
         accessible = {
@@ -121,48 +121,49 @@ class CmdFooter(Edit):
         :returns None if the text in cmd footer does not match any available command
         Evaluates cmd footer text entries.
         """
-        cmd_text = self.edit_text
-        self._history.append(cmd_text)
-
-        # extract :command pattern from cmd input field
-        cmd = self._pattern.search(cmd_text)
-        result = None
-        valid_cmd = {':i', ':insert', ':e', ':export', ':h', ':help', ':q', ':quit'}
-
-        if cmd is not None:
-            cmd = cmd.group(0)
-            args = cmd_text.split(' ', 1)[-1].strip()
-
-            if cmd == ':i' or cmd == ':insert':
-                result = CmdAction.SWITCHMODE, 1
-            elif cmd == ':e' or cmd == ':export':
-                # if no export path follows export command - no space to split on
-                if args.startswith(cmd): args = os.getcwd()
-                self.set_edit_text('Exported to {}'.format(args))
-                result = CmdAction.EXPORT, args
-            elif cmd == ':h' or cmd == ':help':
-                self.set_edit_text('(:i)nsert, (:q)uit')
-            elif cmd == ':q' or cmd == ':quit':
-                result = CmdAction.QUIT, 0
-
         # cmd input field should be cleared before next user key stroke gets displayed
         self.clear_before_keypress = True
+        valid_cmd = {':i', ':insert', ':e', ':export', ':h', ':help', ':q', ':quit'}
 
-        if cmd in valid_cmd:
-            return result
+        if len(self.edit_text) > 0:
+            self._history.append(self.edit_text)
 
-        self.set_edit_text('Invalid command')
+        # extract :command pattern from cmd input field
+        cmd = self._pattern.search(self.edit_text)
+
+        if cmd is None or cmd.group(0) not in valid_cmd:
+            if len(self.edit_text) > 0:
+                self.set_edit_text('Invalid command')
+            return
+
+        cmd = cmd.group(0)
+        args = self.edit_text.split(' ', 1)[-1].strip()
+
+        if cmd == ':i' or cmd == ':insert':
+            return CmdAction.SWITCHMODE, 1
+        elif cmd == ':e' or cmd == ':export':
+            # if no export path follows export command - no space to split on
+            if args.startswith(cmd): args = os.getcwd()
+            self.set_edit_text('Exported to {}'.format(args))
+            return CmdAction.EXPORT, args
+        elif cmd == ':h' or cmd == ':help':
+            self.set_edit_text('(:i)nsert, (:q)uit')
+        elif cmd == ':q' or cmd == ':quit':
+            return CmdAction.QUIT, 0
 
     def empty(self):
         return len(self.edit_text) == 0
 
     def scroll_history_up(self):
-        if len(self._history) > 0:
-            self.set_edit_text(self._history.next())
+        historic_cmd_entry = self._history.prev()
+        if historic_cmd_entry is not None:
+            self.set_edit_text(historic_cmd_entry)
 
     def scroll_history_down(self):
-        if len(self._history) > 0:
-            self.set_edit_text(self._history.prev())
+        historic_cmd_entry = self._history.next()
+        if historic_cmd_entry is not None:
+            self.set_edit_text(historic_cmd_entry)
+
 
 class Mode:
     """ Contains data that differs between interface modes and objects to trigger mode switching """
@@ -276,6 +277,7 @@ class UI:
 
     def _run(self):
         size = self.tty.get_cols_rows()
+        scroll_actions = {'up', 'down', 'page up', 'page down', 'scroll wheel up', 'scroll wheel down'}
 
         while True:
             canvas = self.tty.render( size, focus=True )
@@ -309,25 +311,24 @@ class UI:
                 elif self.tty.mode.label == 'COMMAND':
                     if k == 'enter' and not self.tty.footer.base_widget.empty():
                         eval_res = self.tty.footer.base_widget.cmd_eval(size)
-                        # if nothing is returned because no action is required
-                        if  eval_res is None:
-                            continue
 
-                        elif eval_res[0] == CmdAction.QUIT:
-                            [setattr(self, key, value) for key, value in self.dump().items()]
-                            return
+                        # if valid cmd entry was entered
+                        if  eval_res is not None:
+                            if eval_res[0] == CmdAction.QUIT:
+                                [setattr(self, key, value) for key, value in self.dump().items()]
+                                return
 
-                        elif eval_res[0] == CmdAction.SWITCHMODE:
-                            self.tty.switch_mode()
+                            elif eval_res[0] == CmdAction.SWITCHMODE:
+                                self.tty.switch_mode()
 
-                        elif eval_res[0] == CmdAction.EXPORT:
-                            self._export_to_file(eval_res[1])
+                            elif eval_res[0] == CmdAction.EXPORT:
+                                self._export_to_file(eval_res[1])
 
-                    elif k == 'up':
+                    elif k == 'shift up':
                         self.tty.footer.base_widget.scroll_history_up()
-                    elif k == 'down':
+                    elif k == 'shift down':
                         self.tty.footer.base_widget.scroll_history_down()
-                    elif 'page' in k and self.tty.focus_position == 'body':
+                    elif k in scroll_actions and self.tty.focus_position == 'body':
                         self.tty.keypress(size, k)
                     else:
                         # send keypress to footer cmd input
