@@ -9,11 +9,11 @@ Usage: memfog add
 Options:
   -f --force    Overwrite existing records with imported records if same title
   -h --help     Show this screen
-  -r --raw      Display raw links in record rather than content being linked to
   -t --top <n>  Limit results to top n records [default: 10]
   -v --version  Show version
 
 """
+#   -r --raw      Display raw links in record rather than content being linked to
 from docopt import docopt
 from fuzzywuzzy import fuzz
 from more_itertools import unique_everseen
@@ -29,7 +29,6 @@ class Memfog:
         self.excluded_words = file_io.set_from_file(self.config.exclusions_fp)
         self.DB = Database(self.config.db_fp)
         self.Records = { Rec.title:Rec for Rec in self.DB.session.query(Record).all() }
-        self.RecLink = link.Link()
 
     def create_rec(self):
         """ Initializes a new Record object which is passed to the command line interface. The empty Record's
@@ -58,8 +57,8 @@ class Memfog:
 
             # Rec is None when user enters an invalid record selection or hits ENTER with no selection
             if Rec is not None:
-                if not self.config.raw_links:
-                    Rec.body = self.RecLink.expand(Rec.body)
+                # if not self.config.raw_links:
+                #     Rec.body = link.expand(Rec.body)
 
                 Gui = ui.UI(Rec)
 
@@ -194,7 +193,7 @@ class Config:
 
         self.force_import = argv['--force']
         self.top_n = argv['--top']
-        self.raw_links = argv['--raw']
+        #self.raw_links = argv['--raw']
 
         if self.top_n:
             if util.is_valid_input(self.top_n):

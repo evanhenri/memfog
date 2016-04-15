@@ -7,9 +7,11 @@ import signal
 import os
 import re
 
-from . import file_io, file_sys
+from . import file_io, file_sys, link
 from .util import BidirectionScrollList
 
+raw_record_body = None
+expanded_record_body = None
 
 class Header(Columns):
     """ Contains widgets for header elements (used in Content class) which include
@@ -87,6 +89,7 @@ class CmdAction(Enum):
     QUIT = 0
     SWITCHMODE = 1
     EXPORT = 2
+    VIEW = 3
 
 class CmdFooter(Edit):
     """ Footer class used when ui is in COMMAND mode - provides a command entry field """
@@ -123,7 +126,13 @@ class CmdFooter(Edit):
         """
         # cmd input field should be cleared before next user key stroke gets displayed
         self.clear_before_keypress = True
-        valid_cmd = {':i', ':insert', ':e', ':export', ':h', ':help', ':q', ':quit'}
+        valid_cmd = {':e', ':export',
+                     ':h', ':help',
+                     ':i', ':insert',
+                     ':q', ':quit',
+                     ':v', ':view'}
+
+        valid_views = {'NORMAL','RAW'}
 
         if len(self.edit_text) > 0:
             self._history.append(self.edit_text)
@@ -139,17 +148,23 @@ class CmdFooter(Edit):
         cmd = cmd.group(0)
         args = self.edit_text.split(' ', 1)[-1].strip()
 
-        if cmd == ':i' or cmd == ':insert':
-            return CmdAction.SWITCHMODE, 1
-        elif cmd == ':e' or cmd == ':export':
+        if cmd == ':e' or cmd == ':export':
             # if no export path follows export command - no space to split on
             if args.startswith(cmd): args = os.getcwd()
             self.set_edit_text('Exported to {}'.format(args))
             return CmdAction.EXPORT, args
         elif cmd == ':h' or cmd == ':help':
             self.set_edit_text('(:i)nsert, (:q)uit')
+        elif cmd == ':i' or cmd == ':insert':
+            return CmdAction.SWITCHMODE, 1
         elif cmd == ':q' or cmd == ':quit':
             return CmdAction.QUIT, 0
+        elif cmd == ':v' or cmd == ':view':
+            args = args.upper()
+            if args in valid_views:
+                return CmdAction.VIEW, args
+            else:
+                self.set_edit_text('Valid view: {}'.format(valid_views))
 
     def empty(self):
         return len(self.edit_text) == 0
@@ -195,7 +210,7 @@ class TTY(Frame, urwid.curses_display.Screen):
     """ Facilitates core UI functionality by serving as base screen that all other widgets are placed """
     def __init__(self, Rec, starting_label):
         super(TTY, self).__init__(body=Content(Rec, starting_label), footer=WidgetPlaceholder(Edit('')))
-
+        self.view = 'NORMAL'
         self.mode = Mode(starting_label)
         self._switcher = self._switch_generator()
         self.switch_mode()
@@ -206,6 +221,21 @@ class TTY(Frame, urwid.curses_display.Screen):
             'footer':self.footer
         }
         return accessible[item]
+
+    def switch_view(self, view):
+        # if switching modes will affect what is displayed currently
+        if view != self.view:
+            self.view = view
+            global raw_record_body, expanded_record_body
+
+            if view == 'NORMAL':
+                # save state of raw_record_body
+                raw_record_body = self['content']['body'].edit_text
+                self['content']['body'].set_edit_text(expanded_record_body)
+            elif view == 'RAW':
+                # save state of expanded_record_body
+                expanded_record_body = self['content']['body'].edit_text
+                self['content']['body'].set_edit_text(raw_record_body)
 
     def switch_mode(self):
         """ Helper function so next() does not need to be used directly when switching modes """
@@ -236,6 +266,10 @@ class UI:
         INSERT mode """
     def __init__(self, Rec, start_mode='COMMAND'):
         signal.signal(signal.SIGINT, self.ctrl_c_handler)
+        global raw_record_body, expanded_record_body
+        raw_record_body = Rec.body
+        expanded_record_body = Rec.body = link.expand(Rec.body)
+
         self._force_exit = False
         self.tty = TTY(Rec, start_mode)
         self.starting_values = Rec.dump()
@@ -243,6 +277,9 @@ class UI:
 
     def altered(self):
         """ Returns True if any values in Rec have been changed """
+        # if self.tty.view == 'RAW':
+        #     raw_body = {'body':stored_body}
+        #     return self.starting_values.update(raw_body) != self.dump()
         return self.starting_values != self.dump()
 
     def ctrl_c_handler(self, sig, frame):
@@ -323,6 +360,9 @@ class UI:
 
                             elif eval_res[0] == CmdAction.EXPORT:
                                 self._export_to_file(eval_res[1])
+
+                            elif eval_res[0] == CmdAction.VIEW:
+                                self.tty.switch_view(eval_res[1])
 
                     elif k == 'shift up':
                         self.tty.footer.base_widget.scroll_history_up()
