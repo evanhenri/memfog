@@ -1,0 +1,52 @@
+# FIXME permission error when attempting to EXEC embedded instruction
+
+check if embedded instruction exists
+    if yes, expand content
+        ...
+    on exit, if [PATH] content changed, update data at PATH
+
+
+# fixme, exception thrown if ctrl-L pressed in INSERT mode
+
+# fixme, \t (tab) characters appear as ?
+
+
+
+
+# FIXME cannot paste special characters into records
+
+-------------------------
+
+# TODO if embedded instruction exist
+#           if instruction is altered
+#               change instruction text in db record.
+#           else
+#               change content of linked document and leave db text unchaged
+
+# TODO ALL TAGS SHOULD NOT BE MARKUP, MAKE THEM USE JSON INSTEAD!!!
+# TODO place all content that appears on screen in markup instruction
+#   if record content is pulled from database, its raw view would show
+#       [TITLE](title text)
+#       [KEYWORDS](keyword text)
+#       [BODY](body text)
+#   this works well with [PATH] and [EXEC] embedded instructions because it would allow referencing
+#       different record text components instead of trying to look through 1 huge blob of text
+#   these tags could be automatically inserted when a record was added so that they were already a part
+#       of the content when the record was displayed - their presence would not be seen as a 'change'
+#       to the record content when the record was exited
+
+# TODO if a record has an embedded [EXEC] statement, if the program takes arguements in order to
+#   execute, see if possible for memfog to pause the prgrams execution and allow the user to
+#   enter arguements at the command line, pass those to the program, and continue resume the
+#   programs execution
+
+
+# TODO check if global keyword record exist and if so, interpret all keywords specified as equivalent in searching
+#       e.g. Global record: [drawing]table=[work]bench=(night stand) // [this keyword is optional], (all contained keywords required)
+
+# TODO if ! at end of keyword search, automatically load the highest matching record
+
+# TODO when scrolling history cmd, cursor should be at end of string so next text gets appended
+# TODO toggle between raw content (to display embedded instructions) shown content from it from within the UI by providing the :r command
+# TODO add ability to have keyword=key=word in the keyword area of a record to denote that all words connected with = should be treated as the same
+# TODO add ability to set global aliases, eg db == database in all cases
