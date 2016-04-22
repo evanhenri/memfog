@@ -1,375 +1,306 @@
-from urwid import AttrMap, Columns, Divider, Edit, Frame, ListBox, Text, SimpleFocusListWalker, WidgetPlaceholder
 import urwid.curses_display
-from collections import deque
-from enum import Enum
-import itertools
-import signal
+import urwid
 import os
 import re
 
-from . import file_io, file_sys, link
-from .util import BidirectionScrollList
+from . import link
 
-raw_record_body = None
-expanded_record_body = None
+class ModeLabel(urwid.Text):
+    def __init__(self):
+        super(ModeLabel, self).__init__(
+            markup='',
+            align='left'
+        )
 
-class Header(Columns):
-    """ Contains widgets for header elements (used in Content class) which include
-        the title of the record and the label displaying the current ui mode """
-    def __init__(self, Rec, mode_label):
-        self.widgets = [
-            (AttrMap(Text(mode_label, align='left'), 'HEADER')),
-            (AttrMap(Edit(edit_text=Rec.title, align='right'), 'HEADER'))
-        ]
-        super(Header, self).__init__(self.widgets)
+class Title(urwid.Edit):
+    def __init__(self):
+        super(Title, self).__init__(
+            edit_text='',
+            align='right'
+        )
 
-    def __getitem__(self, item):
-        accessible = {
-            'mode':self.widgets[0].base_widget,
-            'title':self.widgets[-1].base_widget
+class Header(urwid.Columns):
+    def __init__(self):
+        palette_id = 'HEADER_BASE'
+        super(Header, self).__init__(
+            widget_list=[
+                (urwid.AttrMap(ModeLabel(), palette_id)),
+                (urwid.AttrMap(Title(), palette_id))
+            ])
+
+        self._attributes = {
+            'label': self.widget_list[0].base_widget,
+            'title': self.widget_list[-1].base_widget
         }
-        return accessible[item]
+    def __getitem__(self, item):
+        return self._attributes[item]
 
+class Keywords(urwid.Edit):
+    def __init__(self):
+        super(Keywords, self).__init__(
+            caption='',
+            edit_text='',
+            align='left',
+            wrap='clip'
+        )
 
-class Content(ListBox):
-    """ Contains widgets containing mutable record data elements which include
-        the header, keywords, and body widgets. Widgets are stored in ListBox
-        at the following indicies: 0:header 1: horizontal divider 2:body. Note - body is
-        at index 1 when mode=COMMAND and 2 when mode=INSERT as keyword widget
-        is inserted at and removed from index 1 to simulate showing/hiding when
-        switching between modes """
-    def __init__(self, Rec, mode_label):
-        self._keywords = Edit(caption='Keywords: ', edit_text=Rec.keywords, align='left', wrap='clip')
-        self._widgets = SimpleFocusListWalker([
-            Header(Rec, mode_label),
-            Divider('-'),
-            Edit( edit_text=Rec.body, align='left', multiline=True, allow_tab=True)
-        ])
-        super(Content, self).__init__(self._widgets)
+class Body(urwid.Edit):
+    def __init__(self):
+        super(Body, self).__init__(
+            edit_text='',
+            align='left',
+            multiline=True,
+            allow_tab=True
+        )
+        self._attributes = {
+            'text': self.edit_text
+        }
+    def __getitem__(self, item):
+        return self._attributes[item]
+    def __setitem__(self, key, value):
+        self._attributes[key] = value
+
+class CommandFooter(urwid.Edit):
+    def __init__(self):
+        super(CommandFooter, self).__init__(
+            caption='> ',
+            edit_text=''
+        )
+        self.palette_id = 'COMMAND_FOOTER_BASE'
+        self.cmd_pattern = re.compile('(:.\S*)')
+        self.clear_before_keypress = False
+        self.cmd_history = []
+
+    def keypress(self, size, key):
+        if self.clear_before_keypress:
+            self.clear_before_keypress = False
+            self.set_edit_text('')
+
+        super(CommandFooter, self).keypress(size, key)
+
+class InsertFooter(urwid.Columns):
+    def __init__(self):
+        self.palette_id = 'INSERT_FOOTER_BASE'
+        palette_id = [self.palette_id, 'INSERT_FOOTER_HIGHLIGHT']
+        super(InsertFooter, self).__init__(
+            widget_list=[
+                ('pack', urwid.AttrMap(urwid.Text('^X'), palette_id[0])),
+                ('pack', urwid.AttrMap(urwid.Text(' Exit  '), palette_id[1])),
+                ('pack', urwid.AttrMap(urwid.Text('ESC'), palette_id[0])),
+                ('pack', urwid.AttrMap(urwid.Text(' Toggle Mode  '), palette_id[1]))
+            ])
+
+############################3
+
+class Content(urwid.ListBox):
+    def __init__(self):
+        self.keyword_widget = Keywords()
+        super(Content, self).__init__(
+            body=urwid.SimpleFocusListWalker([
+                Header(),
+                urwid.Divider('-'),
+                Body()
+            ]))
+
+        self._attributes = {
+            'header': self.base_widget.body[0],
+            'body':self.base_widget.body[-1],
+        }
+    def __getitem__(self, item):
+        if item == 'keywords':
+            if len(self.base_widget.body) == 3:
+                return self.keyword_widget
+            return self.base_widget.body[1]
+        else:
+            return self._attributes[item]
 
     def show_keywords(self):
-        if len(self._widgets) == 3:
-            # insert keywords widget so it is above divider
-            self._widgets.insert(1, self._keywords)
-
+        self.base_widget.body.insert(1, self.keyword_widget)
     def hide_keywords(self):
-        """ Removes keywords widget from Content ListBox which is at index 1 """
-        if len(self._widgets) > 3:
-            # update stored keywords before removing them from view
-            self._keywords = self._widgets.pop(1)
+        self.keyword_widget = self.base_widget.body.pop(1)
+
+class Footer(urwid.WidgetPlaceholder):
+    def __init__(self):
+        self._attributes = { 'COMMAND': CommandFooter(), 'INSERT': InsertFooter() }
+        super(Footer, self).__init__(
+            original_widget=urwid.Widget()
+        )
+
+    def set_mode(self, mode):
+        footer_widget = self._attributes[mode]
+        self.original_widget = urwid.AttrMap(footer_widget, attr_map=footer_widget.palette_id)
+
+############################3
+
+class ScreenAttributes:
+    def __init__(self):
+        self.palette = { 'INSERT':[ ('HEADER_BASE', 'white', 'dark magenta'),
+                                    ('INSERT_FOOTER_HIGHLIGHT', 'dark gray', 'light gray'),
+                                    ('INSERT_FOOTER_BASE', 'white', 'dark magenta') ],
+
+                         'COMMAND':[ ('HEADER_BASE', 'white', 'black'),
+                                     ('COMMAND_FOOTER_BASE', 'dark cyan', 'black') ] }
+
+class ScreenController(urwid.curses_display.Screen):
+    def __init__(self, mode):
+        super(ScreenController, self).__init__()
+        self.attributes = ScreenAttributes()
+        self.register_palette( self.attributes.palette[mode] )
+
+
+    def set_palette_mode(self, mode):
+        palette = self.attributes.palette.get(mode)
+        if palette is not None:
+            self.register_palette(palette)
+
+############################3
+
+class WidgetController(urwid.Frame):
+    def __init__(self, data={}):
+        super(WidgetController, self).__init__(body=Content(), footer=Footer())
+        self['header']['label'].set_text(data['mode'])
+        self['header']['title'].set_edit_text(data['title'])
+        self['keywords'].set_edit_text(data['keywords'])
+        self['body'].set_edit_text(data['body'])
+        self.footer.set_mode(data['mode'])
 
     def __getitem__(self, item):
-        if item == 'keywords' and len(self._widgets) > 3:
-            # ensure that the _keywords returned reflect the most recent changes
-            self._keywords = self._widgets[1]
+        if item == 'footer':
+            return self.footer.base_widget
+        return self.body[item]
 
-        accessible = {
-            'header':self._widgets[0].base_widget,
-            'keywords':self._keywords,
-            'body':self._widgets[-1]
+    def dump(self):
+        return {
+            'mode':self['header']['label'].text,
+            'title':self['header']['title'].text,
+            'keywords':self['keywords'].text,
+            'body':self['body'].text
         }
-        return accessible[item]
 
+############################3
 
-class InfoFooter(Columns):
-    """ Footer class used when ui is in INSERT mode - displays keyboard shortcuts """
-    def __init__(self):
-        self.widgets = [
-            ('pack', AttrMap(Text('^X'), 'FOOTER_INFO_A')),
-            ('pack', AttrMap(Text(' Exit  '), 'FOOTER_INFO_B')),
-            ('pack', AttrMap(Text('ESC'), 'FOOTER_INFO_A')),
-            ('pack', AttrMap(Text(' Toggle Mode  '), 'FOOTER_INFO_B')),
-        ]
-        super(InfoFooter, self).__init__(self.widgets)
+class DataController:
+    def __init__(self, record, mode):
+        self.mode = mode
 
+        self.raw_data = { 'title':record.title,
+                          'keywords':record.keywords,
+                          'body':record.body }
 
-class CmdAction(Enum):
-    """ Contains enumerated meanings to outcomes certain cmd input entries whose action
-     cannot be called from the CmdFooter class """
-    QUIT = 0
-    SWITCHMODE = 1
-    EXPORT = 2
-    VIEW = 3
+        self.interpretted_data = { 'title':link.expand(record.title),
+                                   'keywords':link.expand(record.keywords),
+                                   'body':link.expand(record.body) }
 
-class CmdFooter(Edit):
-    """ Footer class used when ui is in COMMAND mode - provides a command entry field """
-    def __init__(self):
-        super(CmdFooter, self).__init__(caption='> ')
-        self.clear_before_keypress = False
-        # extract :<command> substring from cmd field
-        self._pattern = re.compile('(:.\S*)')
-        self._history = BidirectionScrollList()
+    def dump(self, data_type='INTERPRETTED'):
+        if data_type == 'RAW':
+            return {**self.raw_data, 'mode':self.mode}
+        return {**self.interpretted_data, 'mode': self.mode}
 
-    def __getitem__(self, item):
-        accessible = {
-            'cmd':self.edit_text
-        }
-        return accessible[item]
+############################3
 
-    def kpi(self, size, key):
-        """
-        keypress intermediary
-        If an invalid entry was made, clear_before_keypress will be set to True
-          and 'Invalid entry' notification will be current edit_text. Clear
-          notification and reset flag before sending keys to keypress
-        """
-        if self.clear_before_keypress:
-            self.set_edit_text('')
-            self.clear_before_keypress = False
-        self.keypress(size, key)
+class UI:
+    def __init__(self, record, mode='COMMAND'):
+        self.Data = DataController(record, mode)
+        self.Screen = ScreenController(mode)
+        self.Wigets = WidgetController( self.Data.dump() )
 
-    def cmd_eval(self, size):
-        """
-        :returns a tuple as (flag to trigger call to action, field to hold text entry widget text)
-        :returns None if the text in cmd footer does not match any available command
-        Evaluates cmd footer text entries.
-        """
-        # cmd input field should be cleared before next user key stroke gets displayed
-        self.clear_before_keypress = True
-        valid_cmd = {':e', ':export',
-                     ':h', ':help',
-                     ':i', ':insert',
-                     ':q', ':quit',
-                     ':v', ':view'}
+        urwid.register_signal(DataController, ['COMMAND MODE', 'INSERT MODE'])
+        urwid.connect_signal(self.Data, 'COMMAND MODE', self._set_mode, 'COMMAND')
+        urwid.connect_signal(self.Data, 'INSERT MODE', self._set_mode, 'INSERT')
 
-        valid_views = {'NORMAL','RAW'}
+        self.Screen.run_wrapper(self._run)
 
-        if len(self.edit_text) > 0:
-            self._history.append(self.edit_text)
+    def _set_mode(self, mode):
+        self.Data.mode = mode
+        self.Screen.set_palette_mode(mode)
+        self.Wigets.footer.set_mode(mode)
+
+    def _evaluate_command(self):
+        cmd_text = self.Wigets['footer'].get_edit_text()
+
+        if len(cmd_text) > 0:
+            self.Wigets['footer'].cmd_history.append(cmd_text)
 
         # extract :command pattern from cmd input field
-        cmd = self._pattern.search(self.edit_text)
+        cmd = self.Wigets['footer'].cmd_pattern.search(cmd_text)
 
-        if cmd is None or cmd.group(0) not in valid_cmd:
-            if len(self.edit_text) > 0:
-                self.set_edit_text('Invalid command')
+        if cmd is None:
+            if len(cmd_text) > 0:
+                self.Wigets['footer'].set_edit_text('Invalid command')
             return
 
         cmd = cmd.group(0)
-        args = self.edit_text.split(' ', 1)[-1].strip()
+        args = cmd_text.split(' ', 1)[-1].strip()
 
         if cmd == ':e' or cmd == ':export':
             # if no export path follows export command - no space to split on
-            if args.startswith(cmd): args = os.getcwd()
-            self.set_edit_text('Exported to {}'.format(args))
-            return CmdAction.EXPORT, args
+            if args.startswith(cmd):
+                args = os.getcwd()
+            self.Wigets['footer'].set_edit_text('Exported to {}'.format(args))
+
         elif cmd == ':h' or cmd == ':help':
-            self.set_edit_text('(:i)nsert, (:q)uit')
+            self.Wigets['footer'].set_edit_text('(:i)nsert, (:q)uit')
+
         elif cmd == ':i' or cmd == ':insert':
-            return CmdAction.SWITCHMODE, 1
-        elif cmd == ':q' or cmd == ':quit':
-            return CmdAction.QUIT, 0
-        elif cmd == ':v' or cmd == ':view':
-            args = args.upper()
-            if args in valid_views:
-                return CmdAction.VIEW, args
-            else:
-                self.set_edit_text('Valid view: {}'.format(valid_views))
+            self.Wigets['footer'].set_edit_text('')
+            urwid.emit_signal(self.Data, 'INSERT MODE')
 
-    def empty(self):
-        return len(self.edit_text) == 0
+        # elif cmd == ':q' or cmd == ':quit':
+        #     return CmdAction.QUIT, 0
+        # elif cmd == ':v' or cmd == ':view':
+        #     if not self.state.change_display(args.upper()):
+        #         self.footer_widget.set_edit_text('Invalid display state \'{}\''.format(args))
 
-    def scroll_history_up(self):
-        historic_cmd_entry = self._history.prev()
-        if historic_cmd_entry is not None:
-            self.set_edit_text(historic_cmd_entry)
-
-    def scroll_history_down(self):
-        historic_cmd_entry = self._history.next()
-        if historic_cmd_entry is not None:
-            self.set_edit_text(historic_cmd_entry)
-
-
-class Mode:
-    """ Contains data that differs between interface modes and objects to trigger mode switching """
-    def __init__(self, starting_label):
-        self.label = starting_label
-        self.identifiers = ['COMMAND','INSERT']
-        self.palettes = [
-            [
-                # COMMAND mode
-                ('HEADER',     'white',     'black'),
-                ('FOOTER_CMD', 'dark cyan', 'black')
-            ],
-            [
-                # INSERT mode
-                ('HEADER',        'white',     'dark magenta'),
-                ('FOOTER_INFO_A', 'dark gray', 'light gray'),
-                ('FOOTER_INFO_B', 'white',     'dark magenta'),
-            ]
-        ]
-        self.settings = deque(zip(self.identifiers, self.palettes))
-
-        if starting_label in self.identifiers:
-            # rotate settings deque so ui initializes using mode specified by starting_label
-            while self.settings[0][0] != starting_label:
-                self.settings.rotate(1)
-
-
-class TTY(Frame, urwid.curses_display.Screen):
-    """ Facilitates core UI functionality by serving as base screen that all other widgets are placed """
-    def __init__(self, Rec, starting_label):
-        super(TTY, self).__init__(body=Content(Rec, starting_label), footer=WidgetPlaceholder(Edit('')))
-        self.view = 'NORMAL'
-        self.mode = Mode(starting_label)
-        self._switcher = self._switch_generator()
-        self.switch_mode()
-
-    def __getitem__(self, item):
-        accessible = {
-            'content':self.body.base_widget,
-            'footer':self.footer
-        }
-        return accessible[item]
-
-    def switch_view(self, view):
-        # if switching modes will affect what is displayed currently
-        if view != self.view:
-            self.view = view
-            global raw_record_body, expanded_record_body
-
-            if view == 'NORMAL':
-                # save state of raw_record_body
-                raw_record_body = self['content']['body'].edit_text
-                self['content']['body'].set_edit_text(expanded_record_body)
-            elif view == 'RAW':
-                # save state of expanded_record_body
-                expanded_record_body = self['content']['body'].edit_text
-                self['content']['body'].set_edit_text(raw_record_body)
-
-    def switch_mode(self):
-        """ Helper function so next() does not need to be used directly when switching modes """
-        next(self._switcher)
-
-    def _switch_generator(self):
-        """ Infinite circular iterator used to flip back and forth between modes """
-        # swap same objects in and out of footer so their values are preserved between swaps
-        cmd_footer, info_footer = CmdFooter(), InfoFooter()
-
-        for label, palette in itertools.cycle(self.mode.settings):
-            self.mode.label = label
-            self.register_palette( palette )
-            self.body['header']['mode'].set_text(label)
-
-            if label == 'COMMAND':
-                self.body.base_widget.hide_keywords()
-                self.footer.original_widget = AttrMap(cmd_footer, attr_map='FOOTER_CMD')
-            elif label == 'INSERT':
-                self.body.base_widget.show_keywords()
-                self.footer.original_widget = AttrMap(info_footer, attr_map='FOOTER_INFO_B')
-            yield
-
-
-class UI:
-    """ User facing class to launch command line interface. Initialization
-        defaults to COMMAND mode unless a new record is being created in which UI is set to
-        INSERT mode """
-    def __init__(self, Rec, start_mode='COMMAND'):
-        signal.signal(signal.SIGINT, self.ctrl_c_handler)
-        global raw_record_body, expanded_record_body
-        raw_record_body = Rec.body
-        expanded_record_body = Rec.body = link.expand(Rec.body)
-
-        self._force_exit = False
-        self.tty = TTY(Rec, start_mode)
-        self.starting_values = Rec.dump()
-        self.tty.run_wrapper( self._run )
-
-    def altered(self):
-        """ Returns True if any values in Rec have been changed """
-        # if self.tty.view == 'RAW':
-        #     raw_body = {'body':stored_body}
-        #     return self.starting_values.update(raw_body) != self.dump()
-        return self.starting_values != self.dump()
-
-    def ctrl_c_handler(self, sig, frame):
-        """ Callback to set flag when ctrl-c is entered. When flag is set, current record is updated before
-            exiting out of the ui """
-        self._force_exit = True
-
-    def dump(self):
-        """ Used to retrieve record elements relevant to record data members """
-        return { 'title':self.tty['content']['header']['title'].edit_text,
-                 'keywords':self.tty['content']['keywords'].edit_text,
-                 'body':self.tty['content']['body'].edit_text }
-
-    def _export_to_file(self, export_path):
-        [setattr(self, key, value) for key, value in self.dump().items()]
-        default_filename = getattr(self, 'title').replace(' ', '_')
-        target_path = os.getcwd() + '/' + default_filename
-
-        # check if path to file pending export has been included in export_path
-        if file_sys.check_path('w', export_path):
-            target_path = export_path
-
-        # check if path to directory to export into has been included in export_path
-        else:
-            if not export_path.endswith('/'):
-                export_path += '/'
-            if file_sys.check_path('w', export_path, default_filename):
-                target_path = export_path + default_filename
-
-        file_io.json_to_file(target_path, self.dump())
-        self.tty.footer.base_widget.set_edit_text('Exported to ' + target_path)
 
     def _run(self):
-        size = self.tty.get_cols_rows()
-        scroll_actions = {'up', 'down', 'page up', 'page down', 'scroll wheel up', 'scroll wheel down'}
+        size = self.Screen.get_cols_rows()
 
         while True:
-            canvas = self.tty.render( size, focus=True )
-            self.tty.draw_screen( size, canvas )
+            canvas = self.Wigets.render(size, focus=True)
+            self.Screen.draw_screen(size, canvas)
             keys = None
 
             while not keys:
-                keys = self.tty.get_input()
-
-                if self._force_exit:
-                    [setattr(self, key, value) for key, value in self.dump().items()]
-                    return
+                keys = self.Screen.get_input()
 
             for k in keys:
                 if k == 'window resize':
-                    size = self.tty.get_cols_rows()
+                    size = self.Screen.get_cols_rows()
 
                 elif k == 'ctrl x':
-                    [setattr(self, key, value) for key, value in self.dump().items()]
                     return
 
                 elif k == 'ctrl l':
-                    self.tty.footer.base_widget.set_edit_text('')
+                    self.Wigets['footer'].set_edit_text('')
 
-                elif self.tty.mode.label == 'INSERT':
+                elif self.Data.mode == 'INSERT':
                     if k == 'esc':
-                        self.tty.switch_mode()
+                        urwid.emit_signal(self.Data, 'COMMAND MODE')
                     else:
-                        self.tty.keypress( size, k )
+                        self.Wigets.keypress(size, k)
 
-                elif self.tty.mode.label == 'COMMAND':
-                    if k == 'enter' and not self.tty.footer.base_widget.empty():
-                        eval_res = self.tty.footer.base_widget.cmd_eval(size)
+                elif self.Data.mode == 'COMMAND':
+                    if k == 'enter':
+                        self._evaluate_command()
+                        self.Wigets['footer'].clear_before_keypress = True
 
-                        # if valid cmd entry was entered
-                        if  eval_res is not None:
-                            if eval_res[0] == CmdAction.QUIT:
-                                [setattr(self, key, value) for key, value in self.dump().items()]
-                                return
-
-                            elif eval_res[0] == CmdAction.SWITCHMODE:
-                                self.tty.switch_mode()
-
-                            elif eval_res[0] == CmdAction.EXPORT:
-                                self._export_to_file(eval_res[1])
-
-                            elif eval_res[0] == CmdAction.VIEW:
-                                self.tty.switch_view(eval_res[1])
-
-                    elif k == 'shift up':
-                        self.tty.footer.base_widget.scroll_history_up()
-                    elif k == 'shift down':
-                        self.tty.footer.base_widget.scroll_history_down()
-                    elif k in scroll_actions and self.tty.focus_position == 'body':
-                        self.tty.keypress(size, k)
+                #         # if valid cmd entry was entered
+                #         if eval_res is not None:
+                #             if eval_res[0] == CmdAction.QUIT:
+                #                 [setattr(self, key, value) for key, value in self.dump().items()]
+                #                 return
+                #
+                #             elif eval_res[0] == CmdAction.EXPORT:
+                #                 self._export_to_file(eval_res[1])
+                #
+                #             elif eval_res[0] == CmdAction.VIEW:
+                #                 self.tty.switch_view(eval_res[1])
+                #
+                #     elif k == 'shift up':
+                #         self.tty.footer.base_widget.scroll_history_up()
+                #     elif k == 'shift down':
+                #         self.tty.footer.base_widget.scroll_history_down()
+                #     elif k in scroll_actions and self.tty.focus_position == 'body':
+                #         self.tty.keypress(size, k)
                     else:
-                        # send keypress to footer cmd input
-                        self.tty.footer.base_widget.kpi((1, ), k)
+                        self.Wigets['footer'].keypress((1,), k)
