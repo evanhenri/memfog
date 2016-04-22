@@ -7,8 +7,6 @@ from . import link
 from .util import BidirectionScrollList
 
 
-
-
 class ModeLabel(urwid.Text):
     def __init__(self):
         super(ModeLabel, self).__init__(
@@ -16,12 +14,14 @@ class ModeLabel(urwid.Text):
             align='left'
         )
 
+
 class Title(urwid.Edit):
     def __init__(self):
         super(Title, self).__init__(
             edit_text='',
             align='right'
         )
+
 
 class Header(urwid.Columns):
     def __init__(self):
@@ -39,6 +39,7 @@ class Header(urwid.Columns):
     def __getitem__(self, item):
         return self._attributes[item]
 
+
 class Keywords(urwid.Edit):
     def __init__(self):
         super(Keywords, self).__init__(
@@ -47,6 +48,7 @@ class Keywords(urwid.Edit):
             align='left',
             wrap='clip'
         )
+
 
 class Body(urwid.Edit):
     def __init__(self):
@@ -63,6 +65,7 @@ class Body(urwid.Edit):
         return self._attributes[item]
     def __setitem__(self, key, value):
         self._attributes[key] = value
+
 
 class CommandFooter(urwid.Edit):
     def __init__(self):
@@ -95,6 +98,7 @@ class CommandFooter(urwid.Edit):
 
         super(CommandFooter, self).keypress(size, key)
 
+
 class InsertFooter(urwid.Columns):
     def __init__(self):
         self.palette_id = 'INSERT_FOOTER_BASE'
@@ -107,7 +111,6 @@ class InsertFooter(urwid.Columns):
                 ('pack', urwid.AttrMap(urwid.Text(' Toggle Mode  '), palette_id[1]))
             ])
 
-############################3
 
 class Content(urwid.ListBox):
     def __init__(self):
@@ -125,16 +128,18 @@ class Content(urwid.ListBox):
         }
     def __getitem__(self, item):
         if item == 'keywords':
+            # keyword widget would not be in ListBox if len(ListBox) == 3
             if len(self.base_widget.body) == 3:
                 return self.keyword_widget
+            # keyword widget is only present at index one (1) in INSERT mode
             return self.base_widget.body[1]
-        else:
-            return self._attributes[item]
+        return self._attributes[item]
 
     def show_keywords(self):
         self.base_widget.body.insert(1, self.keyword_widget)
     def hide_keywords(self):
         self.keyword_widget = self.base_widget.body.pop(1)
+
 
 class Footer(urwid.WidgetPlaceholder):
     def __init__(self):
@@ -147,7 +152,6 @@ class Footer(urwid.WidgetPlaceholder):
         footer_widget = self._attributes[mode]
         self.original_widget = urwid.AttrMap(footer_widget, attr_map=footer_widget.palette_id)
 
-############################3
 
 class ScreenAttributes:
     def __init__(self):
@@ -157,6 +161,7 @@ class ScreenAttributes:
 
                          'COMMAND':[ ('HEADER_BASE', 'white', 'black'),
                                      ('COMMAND_FOOTER_BASE', 'dark cyan', 'black') ] }
+
 
 class ScreenController(urwid.curses_display.Screen):
     def __init__(self, mode):
@@ -170,7 +175,6 @@ class ScreenController(urwid.curses_display.Screen):
         if palette is not None:
             self.register_palette(palette)
 
-############################3
 
 class WidgetController(urwid.Frame):
     def __init__(self):
@@ -196,7 +200,6 @@ class WidgetController(urwid.Frame):
         self['body'].set_edit_text(data['body'])
         self.footer.set_mode(data['interaction_mode'])
 
-############################3
 
 class DataController:
     def __init__(self, record, interaction_mode, view_mode):
@@ -205,23 +208,26 @@ class DataController:
         self.view_mode = view_mode
 
         self.data = {
-            self.modes[2]:{
+            'RAW':{
                 'title':record.title,
                 'keywords':record.keywords,
                 'body':record.body
             },
-            self.modes[3]:{
+            'INTERPRET':{
                 'title':link.expand(record.title),
                 'keywords':link.expand(record.keywords),
                 'body':link.expand(record.body)
             }
         }
 
+        self.interpretted = self.data['RAW'] != self.data['INTERPRET']
+
+
     def dump(self, data_type=None):
         if data_type is None:
             return self.data
         return { **self.data[self.view_mode], 'interaction_mode':self.interaction_mode }
-############################3
+
 
 class UI:
     def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRET'):
@@ -234,6 +240,8 @@ class UI:
         urwid.connect_signal(self.Data, 'COMMAND', self._set_interaction_mode, 'COMMAND')
         urwid.connect_signal(self.Data, 'INSERT', self._set_interaction_mode, 'INSERT')
 
+        self.altered = False
+        self._quit_flag = False
         self.Screen.run_wrapper(self._run)
 
     def _set_interaction_mode(self, mode_id):
@@ -245,46 +253,50 @@ class UI:
         self.Data.view_mode = mode_id
         self.Wigets.update(self.Data.dump(mode_id))
 
+    #def _safe_exit(self):
+
     def _evaluate_command(self, cmd_text):
         if len(cmd_text) > 0:
             self.Wigets['footer'].cmd_history.append(cmd_text)
 
-        # extract :command pattern from cmd input field
-        cmd = self.Wigets['footer'].cmd_pattern.search(cmd_text)
+            # extract :command pattern from cmd input field
+            cmd = self.Wigets['footer'].cmd_pattern.search(cmd_text)
 
-        if cmd is None:
-            if len(cmd_text) > 0:
+            if cmd is not None:
+                cmd = cmd.group(0)
+                args = cmd_text.split(' ', 1)[-1].strip()
+
+                if cmd == ':e' or cmd == ':export':
+                    # Use current working directory if no export argument was provided as argument
+                    if args.startswith(cmd):
+                        args = os.getcwd()
+                    self.Wigets['footer'].set_edit_text('Exported to {}'.format(args))
+
+                elif cmd == ':h' or cmd == ':help':
+                    self.Wigets['footer'].set_edit_text('(:i)nsert, (:q)uit')
+
+                elif cmd == ':i' or cmd == ':insert':
+                    self.Wigets['footer'].set_edit_text('')
+                    urwid.emit_signal(self.Data, 'INSERT')
+
+                elif cmd == ':q' or cmd == ':quit':
+                    self._quit_flag = True
+
+                elif cmd == ':v' or cmd == ':view':
+                    try:
+                        self._set_view_mode(args.upper())
+                    except KeyError:
+                        self.Wigets['footer'].set_edit_text('Invalid view mode \'{}\''.format(args))
+            else:
                 self.Wigets['footer'].set_edit_text('Invalid command')
-            return
-
-        cmd = cmd.group(0)
-        args = cmd_text.split(' ', 1)[-1].strip()
-
-        if cmd == ':e' or cmd == ':export':
-            # if no export path follows export command - no space to split on
-            if args.startswith(cmd):
-                args = os.getcwd()
-            self.Wigets['footer'].set_edit_text('Exported to {}'.format(args))
-
-        elif cmd == ':h' or cmd == ':help':
-            self.Wigets['footer'].set_edit_text('(:i)nsert, (:q)uit')
-
-        elif cmd == ':i' or cmd == ':insert':
-            self.Wigets['footer'].set_edit_text('')
-            urwid.emit_signal(self.Data, 'INSERT')
-
-        # elif cmd == ':q' or cmd == ':quit':
-        #     return CmdAction.QUIT, 0
-        elif cmd == ':v' or cmd == ':view':
-            try:
-                self._set_view_mode(args.upper())
-            except KeyError:
-                self.Wigets['footer'].set_edit_text('Invalid view mode \'{}\''.format(args))
 
     def _run(self):
         size = self.Screen.get_cols_rows()
 
         while True:
+            if self._quit_flag:
+                return
+
             canvas = self.Wigets.render(size, focus=True)
             self.Screen.draw_screen(size, canvas)
             keys = None
@@ -307,6 +319,7 @@ class UI:
                         urwid.emit_signal(self.Data, 'COMMAND')
                     else:
                         self.Wigets.keypress(size, k)
+                        self.altered = True
 
                 elif self.Data.interaction_mode == 'COMMAND':
                     if k == 'enter':
@@ -317,18 +330,6 @@ class UI:
                         # if error results from entered command, clear error message before next keystroke appears
                         self.Wigets['footer'].clear_before_keypress = True
 
-                #         # if valid cmd entry was entered
-                #         if eval_res is not None:
-                #             if eval_res[0] == CmdAction.QUIT:
-                #                 [setattr(self, key, value) for key, value in self.dump().items()]
-                #                 return
-                #
-                #             elif eval_res[0] == CmdAction.EXPORT:
-                #                 self._export_to_file(eval_res[1])
-                #
-                #             elif eval_res[0] == CmdAction.VIEW:
-                #                 self.tty.switch_view(eval_res[1])
-                #
                     elif k == 'shift up':
                         self.Wigets['footer'].scroll_history_up()
                     elif k == 'shift down':
