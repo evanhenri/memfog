@@ -42,24 +42,28 @@ class BidirectionScrollList(list):
     """
     def __init__(self, lst=[]):
         super(BidirectionScrollList, self).__init__(lst)
-        self._index = len(lst)
+        self._i = len(self)
 
     def append(self, p_object):
-        # prev returns most recent item if prev is called after append
-        self._index += 1
         super(BidirectionScrollList, self).append(p_object)
+        self._i = len(self)
+        # prev returns most recent item if prev is called after append
 
     def next(self):
-        if self._index < len(self)-1:
-            self._index += 1
-            return self[self._index]
-        return None
+        try:
+            val = self[self._i + 1]
+            self._i += 1
+            return val
+        except IndexError:
+            return None
 
     def prev(self):
-        if self._index > 0:
-            self._index -= 1
-            return self[self._index]
-        return None
+        try:
+            val = self[self._i-1]
+            self._i -= 1
+            return val
+        except IndexError:
+            return None
 
 
 
