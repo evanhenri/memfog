@@ -81,8 +81,6 @@ class CommandFooter(urwid.Edit):
         past_command = self.cmd_history.next()
         if past_command is not None:
             self.set_edit_text(past_command)
-        else:
-            self.set_edit_text('')
 
     def keypress(self, size, key):
         if self.clear_before_keypress:
