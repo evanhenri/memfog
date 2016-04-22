@@ -6,6 +6,9 @@ import re
 from . import link
 from .util import BidirectionScrollList
 
+
+
+
 class ModeLabel(urwid.Text):
     def __init__(self):
         super(ModeLabel, self).__init__(
@@ -71,6 +74,9 @@ class CommandFooter(urwid.Edit):
         self.cmd_pattern = re.compile('(:.\S*)')
         self.clear_before_keypress = False
         self.cmd_history = BidirectionScrollList()
+
+    def clear_text(self):
+        self.set_edit_text('')
 
     def scroll_history_up(self):
         past_command = self.cmd_history.prev()
@@ -167,13 +173,8 @@ class ScreenController(urwid.curses_display.Screen):
 ############################3
 
 class WidgetController(urwid.Frame):
-    def __init__(self, data={}):
+    def __init__(self):
         super(WidgetController, self).__init__(body=Content(), footer=Footer())
-        self['header']['label'].set_text(data['mode'])
-        self['header']['title'].set_edit_text(data['title'])
-        self['keywords'].set_edit_text(data['keywords'])
-        self['body'].set_edit_text(data['body'])
-        self.footer.set_mode(data['mode'])
 
     def __getitem__(self, item):
         if item == 'footer':
@@ -188,47 +189,63 @@ class WidgetController(urwid.Frame):
             'body':self['body'].text
         }
 
+    def update(self, data={}):
+        self['header']['label'].set_text(data['interaction_mode'])
+        self['header']['title'].set_edit_text(data['title'])
+        self['keywords'].set_edit_text(data['keywords'])
+        self['body'].set_edit_text(data['body'])
+        self.footer.set_mode(data['interaction_mode'])
+
 ############################3
 
 class DataController:
-    def __init__(self, record, mode):
-        self.mode = mode
+    def __init__(self, record, interaction_mode, view_mode):
+        self.modes = ['COMMAND', 'INSERT', 'RAW', 'INTERPRET']
+        self.interaction_mode = interaction_mode
+        self.view_mode = view_mode
 
-        self.raw_data = { 'title':record.title,
-                          'keywords':record.keywords,
-                          'body':record.body }
+        self.data = {
+            self.modes[2]:{
+                'title':record.title,
+                'keywords':record.keywords,
+                'body':record.body
+            },
+            self.modes[3]:{
+                'title':link.expand(record.title),
+                'keywords':link.expand(record.keywords),
+                'body':link.expand(record.body)
+            }
+        }
 
-        self.interpretted_data = { 'title':link.expand(record.title),
-                                   'keywords':link.expand(record.keywords),
-                                   'body':link.expand(record.body) }
-
-    def dump(self, data_type='INTERPRETTED'):
-        if data_type == 'RAW':
-            return {**self.raw_data, 'mode':self.mode}
-        return {**self.interpretted_data, 'mode': self.mode}
-
+    def dump(self, data_type=None):
+        if data_type is None:
+            return self.data
+        return { **self.data[self.view_mode], 'interaction_mode':self.interaction_mode }
 ############################3
 
 class UI:
-    def __init__(self, record, mode='COMMAND'):
-        self.Data = DataController(record, mode)
-        self.Screen = ScreenController(mode)
-        self.Wigets = WidgetController( self.Data.dump() )
+    def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRET'):
+        self.Screen = ScreenController(interaction_mode)
+        self.Data = DataController(record, interaction_mode, view_mode)
+        self.Wigets = WidgetController()
+        self.Wigets.update(self.Data.dump(view_mode))
 
-        urwid.register_signal(DataController, ['COMMAND MODE', 'INSERT MODE'])
-        urwid.connect_signal(self.Data, 'COMMAND MODE', self._set_mode, 'COMMAND')
-        urwid.connect_signal(self.Data, 'INSERT MODE', self._set_mode, 'INSERT')
+        urwid.register_signal(DataController, self.Data.modes)
+        urwid.connect_signal(self.Data, 'COMMAND', self._set_interaction_mode, 'COMMAND')
+        urwid.connect_signal(self.Data, 'INSERT', self._set_interaction_mode, 'INSERT')
 
         self.Screen.run_wrapper(self._run)
 
-    def _set_mode(self, mode):
-        self.Data.mode = mode
-        self.Screen.set_palette_mode(mode)
-        self.Wigets.footer.set_mode(mode)
+    def _set_interaction_mode(self, mode_id):
+        self.Data.interaction_mode = mode_id
+        self.Screen.set_palette_mode(mode_id)
+        self.Wigets.footer.set_mode(mode_id)
 
-    def _evaluate_command(self):
-        cmd_text = self.Wigets['footer'].get_edit_text()
+    def _set_view_mode(self, mode_id):
+        self.Data.view_mode = mode_id
+        self.Wigets.update(self.Data.dump(mode_id))
 
+    def _evaluate_command(self, cmd_text):
         if len(cmd_text) > 0:
             self.Wigets['footer'].cmd_history.append(cmd_text)
 
@@ -254,14 +271,15 @@ class UI:
 
         elif cmd == ':i' or cmd == ':insert':
             self.Wigets['footer'].set_edit_text('')
-            urwid.emit_signal(self.Data, 'INSERT MODE')
+            urwid.emit_signal(self.Data, 'INSERT')
 
         # elif cmd == ':q' or cmd == ':quit':
         #     return CmdAction.QUIT, 0
-        # elif cmd == ':v' or cmd == ':view':
-        #     if not self.state.change_display(args.upper()):
-        #         self.footer_widget.set_edit_text('Invalid display state \'{}\''.format(args))
-
+        elif cmd == ':v' or cmd == ':view':
+            try:
+                self._set_view_mode(args.upper())
+            except KeyError:
+                self.Wigets['footer'].set_edit_text('Invalid view mode \'{}\''.format(args))
 
     def _run(self):
         size = self.Screen.get_cols_rows()
@@ -282,17 +300,21 @@ class UI:
                     return
 
                 elif k == 'ctrl l':
-                    self.Wigets['footer'].set_edit_text('')
+                    self.Wigets['footer'].clear_text()
 
-                elif self.Data.mode == 'INSERT':
+                elif self.Data.interaction_mode == 'INSERT':
                     if k == 'esc':
-                        urwid.emit_signal(self.Data, 'COMMAND MODE')
+                        urwid.emit_signal(self.Data, 'COMMAND')
                     else:
                         self.Wigets.keypress(size, k)
 
-                elif self.Data.mode == 'COMMAND':
+                elif self.Data.interaction_mode == 'COMMAND':
                     if k == 'enter':
-                        self._evaluate_command()
+                        cmd_text = self.Wigets['footer'].get_edit_text()
+                        self.Wigets['footer'].clear_text()
+
+                        self._evaluate_command(cmd_text)
+                        # if error results from entered command, clear error message before next keystroke appears
                         self.Wigets['footer'].clear_before_keypress = True
 
                 #         # if valid cmd entry was entered
