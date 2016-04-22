@@ -3,3 +3,4 @@ datadir/
 test.py
 *.json
 *.pyc
+todo
