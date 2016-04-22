@@ -39,6 +39,8 @@ def standardize(s):
 class BidirectionScrollList(list):
     """
     built-in list() wrapper with next and prev functionality
+    Returns next/previous value from sequence or None if next/previous would go outside of sequence bounds
+    Index used to track next/previous item begins after most recent item in list and resets each time a new item is added
     """
     def __init__(self, lst=[]):
         super(BidirectionScrollList, self).__init__(lst)
@@ -46,24 +48,20 @@ class BidirectionScrollList(list):
 
     def append(self, p_object):
         super(BidirectionScrollList, self).append(p_object)
+        # reset tracked index to
         self._i = len(self)
-        # prev returns most recent item if prev is called after append
 
     def next(self):
-        try:
-            val = self[self._i + 1]
-            self._i += 1
-            return val
-        except IndexError:
+        if self._i+1 == len(self):
             return None
+        self._i += 1
+        return self[self._i]
 
     def prev(self):
-        try:
-            val = self[self._i-1]
-            self._i -= 1
-            return val
-        except IndexError:
+        if self._i-1 < 0:
             return None
+        self._i -= 1
+        return self[self._i]
 
 
 
