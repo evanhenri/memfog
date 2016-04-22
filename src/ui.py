@@ -4,6 +4,7 @@ import os
 import re
 
 from . import link
+from .util import BidirectionScrollList
 
 class ModeLabel(urwid.Text):
     def __init__(self):
@@ -69,7 +70,19 @@ class CommandFooter(urwid.Edit):
         self.palette_id = 'COMMAND_FOOTER_BASE'
         self.cmd_pattern = re.compile('(:.\S*)')
         self.clear_before_keypress = False
-        self.cmd_history = []
+        self.cmd_history = BidirectionScrollList()
+
+    def scroll_history_up(self):
+        past_command = self.cmd_history.prev()
+        if past_command is not None:
+            self.set_edit_text(past_command)
+
+    def scroll_history_down(self):
+        past_command = self.cmd_history.next()
+        if past_command is not None:
+            self.set_edit_text(past_command)
+        else:
+            self.set_edit_text('')
 
     def keypress(self, size, key):
         if self.clear_before_keypress:
@@ -296,10 +309,11 @@ class UI:
                 #             elif eval_res[0] == CmdAction.VIEW:
                 #                 self.tty.switch_view(eval_res[1])
                 #
-                #     elif k == 'shift up':
-                #         self.tty.footer.base_widget.scroll_history_up()
-                #     elif k == 'shift down':
-                #         self.tty.footer.base_widget.scroll_history_down()
+                    elif k == 'shift up':
+                        self.Wigets['footer'].scroll_history_up()
+                    elif k == 'shift down':
+                        self.Wigets['footer'].scroll_history_down()
+
                 #     elif k in scroll_actions and self.tty.focus_position == 'body':
                 #         self.tty.keypress(size, k)
                     else:
