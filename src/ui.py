@@ -367,9 +367,6 @@ class UI:
                     self._safe_exit()
                     return
 
-                elif k == 'ctrl l':
-                    self.Wigets['footer'].clear_text()
-
                 elif k in self.Screen.scroll_actions and self.Wigets.focus_position == 'body':
                     self.Wigets.keypress(size, k)
 
@@ -381,7 +378,9 @@ class UI:
                         self.Data.altered()
 
                 elif self.Data.interaction_mode == 'COMMAND':
-                    if k == 'enter':
+                    if k == 'ctrl l':
+                        self.Wigets['footer'].clear_text()
+                    elif k == 'enter':
                         cmd_text = self.Wigets['footer'].get_edit_text()
                         self.Wigets['footer'].clear_text()
 
