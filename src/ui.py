@@ -6,6 +6,7 @@ import re
 from . import link
 from . import util
 from . import file_io
+from . import file_sys
 
 class ModeLabel(urwid.Text):
     def __init__(self):
@@ -279,6 +280,16 @@ class UI:
             if tag == 'PATH':
                 file_io.str_to_file(value, self.Data.interpretted_view.body)
 
+    def _export(self, fp, content):
+        default_dp = os.getcwd()
+        default_fn = (content['title']).replace(' ', '_')
+        fp = file_sys.fix_path(fp, default_dp, default_fn)
+
+        if not file_sys.check_path('w', fp):
+            return 'Unable to export to \'{}\''.format(fp)
+        file_io.json_to_file(fp, self.Wigets.dump())
+        return 'Exported to \'{}\''.format(fp)
+
     def _evaluate_command(self, cmd_text):
         if len(cmd_text) > 0:
             self.Wigets['footer'].cmd_history.append(cmd_text)
@@ -291,11 +302,10 @@ class UI:
                 args = cmd_text.split(' ', 1)[-1].strip()
 
                 if cmd == ':e' or cmd == ':export':
-                    # Use current working directory if no export argument was provided as argument
-                    if args.startswith(cmd):
-                        args = os.getcwd()
-                    ###### NEED TO RE-ADD EXPORT FUNCTIONALITY
-                    self.Wigets['footer'].set_edit_text('Exported to {}'.format(args))
+                    # If no filename/path was given, clear string to trigger default to be set in _export()
+                    if args.startswith(cmd): args = ''
+                    result = self._export(args, self.Wigets.dump())
+                    self.Wigets['footer'].set_edit_text(result)
 
                 elif cmd == ':h' or cmd == ':help':
                     self.Wigets['footer'].set_edit_text('(:i)nsert, (:q)uit')
