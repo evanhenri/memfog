@@ -1,5 +1,6 @@
 import urwid.curses_display
 import urwid
+import signal
 import os
 import re
 
@@ -263,12 +264,13 @@ class DataController:
 
 class UI:
     def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRETED'):
+        signal.signal(signal.SIGINT, self._ctrl_c_callback)
         self.Screen = ScreenController(interaction_mode)
         self.Data = DataController(record, interaction_mode, view_mode)
         self.Wigets = WidgetController()
         self.Wigets.update(self.Data.get(view_mode))
 
-        self._quit_flag = False
+        self._exit_flag = False
         self.db_update_required = False
         self.Screen.run_wrapper(self._run)
 
@@ -284,6 +286,7 @@ class UI:
         self.Wigets.update(self.Data.get(mode_id))
 
     def _safe_exit(self):
+        self._exit_flag = True
         self.Data.update(self.Wigets.dump())
 
         if self.Data.is_interpreted:
@@ -298,6 +301,8 @@ class UI:
         if self.Data.raw_view.altered:
             self.db_update_required = True
 
+    def _ctrl_c_callback(self, sig, frame):
+        self._safe_exit()
 
     def _export(self, fp, content):
         default_dp = os.getcwd()
@@ -334,7 +339,7 @@ class UI:
                     self._set_interaction_mode('INSERT')
 
                 elif cmd == ':q' or cmd == ':quit':
-                    self._quit_flag = True
+                    self._safe_exit()
 
                 elif cmd == ':v' or cmd == ':view':
                     try:
@@ -347,11 +352,7 @@ class UI:
     def _run(self):
         size = self.Screen.get_cols_rows()
 
-        while True:
-            if self._quit_flag:
-                self._safe_exit()
-                return
-
+        while not self._exit_flag:
             canvas = self.Wigets.render(size, focus=True)
             self.Screen.draw_screen(size, canvas)
             keys = None
@@ -363,9 +364,8 @@ class UI:
                 if k == 'window resize':
                     size = self.Screen.get_cols_rows()
 
-                elif k == 'ctrl x':##########change this to ctrl c
+                elif k == 'ctrl c':##########change this to ctrl c
                     self._safe_exit()
-                    return
 
                 elif k in self.Screen.scroll_actions and self.Wigets.focus_position == 'body':
                     self.Wigets.keypress(size, k)
