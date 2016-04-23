@@ -38,8 +38,8 @@ class Memfog:
         # construct Record from data entered into UI. Start UI in INSERT mode since a new record is being created
         Gui = ui.UI(Rec, 'INSERT')
 
-        if Gui.altered():
-            [setattr(Rec, k, v) for k,v in Gui.dump().items()]
+        if Gui.db_update_required:
+            [setattr(Rec, k, v) for k,v in Gui.Data.raw_view.dump().items()]
             self.DB.insert(Rec)
 
     def display_rec(self, user_keywords):
@@ -62,9 +62,9 @@ class Memfog:
 
                 Gui = ui.UI(Rec)
 
-                if Gui.altered():
-                    updated_keys = util.k_intersect_v_diff(Rec.dump(), Gui.dump())
-                    [setattr(Rec, k, getattr(Gui, k)) for k in updated_keys]
+                if Gui.db_update_required:
+                    updated_keys = util.k_intersect_v_diff(Rec.dump(), Gui.Data.raw_view.dump())
+                    [setattr(Rec, k, getattr(Gui.Data.raw_view, k)) for k in updated_keys]
                     self.DB.update(Rec, updated_keys)
             else:
                 break
