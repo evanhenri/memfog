@@ -221,43 +221,55 @@ class ViewData:
 
 class DataController:
     def __init__(self, record, interaction_mode, view_mode):
-        self.modes = ['COMMAND', 'INSERT', 'RAW', 'INTERPRETTED']
+        self.modes = ['COMMAND', 'INSERT', 'RAW', 'INTERPRETED']
 
         self.interaction_mode = interaction_mode
         self.view_mode = view_mode
 
         self.raw_view = ViewData(record)
-        self.interpretted_view = ViewData(record)
+        self.interpreted_view = ViewData(record)
 
-        for k,v in self.interpretted_view.dump().items():
-            setattr(self.interpretted_view, k, link.expand(v))
+        for k,v in self.interpreted_view.dump().items():
+            setattr(self.interpreted_view, k, link.expand(v))
 
-        self.is_interpretted = self.get('RAW') != self.get('INTERPRETTED')
+        self.is_interpreted = self.get('RAW') != self.get('INTERPRETED')
 
     def altered(self):
-        switch = { 'RAW': self.raw_view, 'INTERPRETTED': self.interpretted_view }
+        switch = { 'RAW': self.raw_view, 'INTERPRETED': self.interpreted_view }
         setattr(switch[self.view_mode], 'altered', True)
 
     def dump(self):
-        return { 'RAW':self.get('RAW'), 'INTERPRETTED':self.get('INTERPRETTED') }
+        return { 'RAW':self.get('RAW'), 'INTERPRETED':self.get('INTERPRETED') }
 
     def get(self, view_mode):
-        switch = { 'RAW':self.raw_view.dump, 'INTERPRETTED':self.interpretted_view.dump }
+        switch = { 'RAW':self.raw_view.dump, 'INTERPRETED':self.interpreted_view.dump }
         return { **switch[view_mode](), **{'interaction_mode':self.interaction_mode} }
 
     def update(self, view_data):
-        switch = { 'RAW': self.raw_view.update, 'INTERPRETTED': self.interpretted_view.update }
-        switch[self.view_mode](view_data)
+        """
+        Updates stored data to reflect view_data from Widgets
+        If record data is not being interpreted, makes sure data from other views is kept in sync
+        """
+        if self.view_mode == 'RAW':
+            self.raw_view.update(view_data)
+            if not self.is_interpreted:
+                self.interpreted_view = self.raw_view
+
+        elif self.view_mode == 'INTERPRETED':
+            self.interpreted_view.update(view_data)
+            if not self.is_interpreted:
+                self.raw_view = self.interpreted_view
 
 
 class UI:
-    def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRETTED'):
+    def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRETED'):
         self.Screen = ScreenController(interaction_mode)
         self.Data = DataController(record, interaction_mode, view_mode)
         self.Wigets = WidgetController()
         self.Wigets.update(self.Data.get(view_mode))
 
         self._quit_flag = False
+        self.db_update_required = False
         self.Screen.run_wrapper(self._run)
 
     def _set_interaction_mode(self, mode_id):
@@ -274,11 +286,18 @@ class UI:
     def _safe_exit(self):
         self.Data.update(self.Wigets.dump())
 
-        if self.Data.is_interpretted and self.Data.interpretted_view.altered:
-            tag, value = link.extract(self.Data.raw_view.body)
+        if self.Data.is_interpreted:
+            if self.Data.interpreted_view.altered:
+                tag, value = link.extract(self.Data.raw_view.body)
+                if tag == 'PATH':
+                    # write changes to linked file
+                    file_io.str_to_file(value, self.Data.interpreted_view.body)
+        # if uninterpreted, all view data is kept in sync
+        # if interpreted, changes to the raw record have been made
+        # both circumstances require an update to be made in the record database
+        if self.Data.raw_view.altered:
+            self.db_update_required = True
 
-            if tag == 'PATH':
-                file_io.str_to_file(value, self.Data.interpretted_view.body)
 
     def _export(self, fp, content):
         default_dp = os.getcwd()
@@ -308,7 +327,7 @@ class UI:
                     self.Wigets['footer'].set_edit_text(result)
 
                 elif cmd == ':h' or cmd == ':help':
-                    self.Wigets['footer'].set_edit_text('(:i)nsert, (:q)uit')
+                    self.Wigets['footer'].set_edit_text('[:e]xport <path>, [:i]nsert, [:q]uit, [:v]iew <mode>')
 
                 elif cmd == ':i' or cmd == ':insert':
                     self.Wigets['footer'].set_edit_text('')
@@ -321,7 +340,7 @@ class UI:
                     try:
                         self._set_view_mode(args.upper())
                     except KeyError:
-                        self.Wigets['footer'].set_edit_text('Invalid view mode \'{}\''.format(args))
+                        self.Wigets['footer'].set_edit_text('Valid views = \'raw\',\'interpreted\''.format(args))
             else:
                 self.Wigets['footer'].set_edit_text('Invalid command')
 
@@ -357,11 +376,9 @@ class UI:
                 elif self.Data.interaction_mode == 'INSERT':
                     if k == 'esc':
                         self._set_interaction_mode('COMMAND')
-
                     else:
                         self.Wigets.keypress(size, k)
                         self.Data.altered()
-
 
                 elif self.Data.interaction_mode == 'COMMAND':
                     if k == 'enter':
