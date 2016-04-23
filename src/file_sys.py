@@ -38,7 +38,7 @@ def check_path(mode='r', *input_paths):
     """
     :type input_paths: list of strings
     :type mode: char
-    Returns Trye/False depending on if using mode on input_path is valid
+    Returns True/False depending on if using mode on input_path is valid
     """
     expanded_elements = map(os.path.expanduser, chain(input_paths))
     merged_elements = '/'.join(expanded_elements)
@@ -80,5 +80,26 @@ def check_path(mode='r', *input_paths):
             return True
         return False
 
+def fix_path(fp, default_dp, default_fn):
+    """
+    :param fp: file path
+    :param default_dp: default directory path
+    :param default_fn: default file name
+    """
+    if len(fp) > 0:
+        if fp[-1] == '/':
+            fp = fp.rsplit('/', 1)[0]
 
+        if default_dp[-1] == '/':
+            default_dp = default_dp.rsplit('/', 1)[0]
 
+        dp, *fp = fp.rsplit('/', 1)
+
+        if os.path.isdir(dp):
+            if len(fp) > 0:
+                return dp + '/' + ''.join(fp)
+            return dp + '/' + default_fn
+        # if only a filename was provided but no path in which to place it
+        elif '/' not in dp:
+            return default_dp + '/' + dp
+    return default_dp + '/' + default_fn
