@@ -18,11 +18,9 @@ def expand(s):
             # replace [PATH](fp) in Record.body with the contents of the file at fp
             s = s.replace(match.group(0), file_io.str_from_file(value))
         elif key == 'EXEC':
-            args = [os.path.expanduser(v) for v in value.split()]
-            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            s, errs = map(lambda x: x.decode("utf-8"), proc.communicate(timeout=5))
-            if len(errs) > 0:
-                s += '\n\n' + errs.decode("utf-8")
+            proc = subprocess.Popen(value, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+            s, errors = proc.communicate(timeout=5)
+            s += errors
     return s
 
 def extract(s):
