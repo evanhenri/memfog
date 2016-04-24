@@ -4,7 +4,7 @@ import signal
 import os
 import re
 
-from . import link
+from . import instruction
 from . import util
 from . import file_io
 from . import file_sys

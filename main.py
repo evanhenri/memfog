@@ -20,7 +20,7 @@ from more_itertools import unique_everseen
 import datetime
 import os
 
-from src import file_io, file_sys, link, ui, user, util
+from src import file_io, file_sys, instruction, ui, user, util
 from src.db import Database, Record
 
 class Memfog:
