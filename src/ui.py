@@ -267,7 +267,7 @@ class DataController:
         self.interpreted_view = ViewData(record)
 
         for k,v in self.interpreted_view.dump().items():
-            setattr(self.interpreted_view, k, link.expand(v))
+            setattr(self.interpreted_view, k, instruction.expand(v))
 
         self.is_interpreted = self.get('RAW') != self.get('INTERPRETED')
 
@@ -326,7 +326,7 @@ class UI:
 
         if self.Data.is_interpreted:
             if self.Data.interpreted_view.is_altered():
-                tag, value = link.extract(self.Data.raw_view.body)
+                tag, value = instruction.extract(self.Data.raw_view.body)
                 if tag == 'PATH':
                     # Write changes to linked file
                     file_io.str_to_file(value, self.Data.interpreted_view.body)
