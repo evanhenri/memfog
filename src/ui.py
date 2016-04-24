@@ -45,7 +45,7 @@ class Header(urwid.Columns):
 class Keywords(urwid.Edit):
     def __init__(self):
         super(Keywords, self).__init__(
-            caption='',
+            caption='Keywords: ',
             edit_text='',
             align='left',
             wrap='clip'
@@ -128,6 +128,7 @@ class Content(urwid.ListBox):
             'header': self.base_widget.body[0],
             'body':self.base_widget.body[-1],
         }
+
     def __getitem__(self, item):
         if item == 'keywords':
             # keyword widget would not be in ListBox if len(ListBox) == 3
@@ -137,10 +138,16 @@ class Content(urwid.ListBox):
             return self.base_widget.body[1]
         return self._attributes[item]
 
-    def show_keywords(self):
+    def keyword_widget_handler(self):
+        interaction_mode = self['header']['label'].text
+        switch = { 'INSERT':self._show_keywords, 'COMMAND':self._hide_keywords }
+        switch[interaction_mode]()
+
+    def _show_keywords(self):
         self.base_widget.body.insert(1, self.keyword_widget)
-    def hide_keywords(self):
-        self.keyword_widget = self.base_widget.body.pop(1)
+    def _hide_keywords(self):
+        if len(self.base_widget.body) == 4:
+            self.keyword_widget = self.base_widget.body.pop(1)
 
 
 class Footer(urwid.WidgetPlaceholder):
@@ -166,10 +173,9 @@ class ScreenAttributes:
 
 
 class ScreenController(urwid.curses_display.Screen):
-    def __init__(self, mode):
+    def __init__(self):
         super(ScreenController, self).__init__()
         self.attributes = ScreenAttributes()
-        self.register_palette( self.attributes.palette[mode] )
         self.scroll_actions = {'up', 'down', 'page up', 'page down', 'scroll wheel up', 'scroll wheel down'}
 
     def set_palette_mode(self, mode):
@@ -189,9 +195,9 @@ class WidgetController(urwid.Frame):
 
     def dump(self):
         return {
-            'title':self['header']['title'].text,
-            'keywords':self['keywords'].text,
-            'body':self['body'].text
+            'title':self['header']['title'].edit_text,
+            'keywords':self['keywords'].edit_text,
+            'body':self['body'].edit_text
         }
 
     def update(self, data={}):
@@ -211,21 +217,28 @@ class ViewData:
         self.title = record.title
         self.keywords = record.keywords
         self.body = record.body
-        self.altered = False
+        self.starting_content_hash = self.content_hash()
+
+    def content_hash(self):
+        return hash(self.title + self.keywords + self.body)
 
     def dump(self):
-        return { k:v for k,v in self.__dict__.items() if k != 'altered' }
+        exclusions = { 'starting_content_hash' }
+        return { k:v for k,v in self.__dict__.items() if k not in exclusions }
+
+    def is_altered(self):
+        return self.starting_content_hash != self.content_hash()
 
     def update(self, args):
         self.__dict__.update(args)
 
 
 class DataController:
-    def __init__(self, record, interaction_mode, view_mode):
+    def __init__(self, record):
         self.modes = ['COMMAND', 'INSERT', 'RAW', 'INTERPRETED']
 
-        self.interaction_mode = interaction_mode
-        self.view_mode = view_mode
+        self.interaction_mode = ''
+        self.view_mode = ''
 
         self.raw_view = ViewData(record)
         self.interpreted_view = ViewData(record)
@@ -234,10 +247,6 @@ class DataController:
             setattr(self.interpreted_view, k, link.expand(v))
 
         self.is_interpreted = self.get('RAW') != self.get('INTERPRETED')
-
-    def altered(self):
-        switch = { 'RAW': self.raw_view, 'INTERPRETED': self.interpreted_view }
-        setattr(switch[self.view_mode], 'altered', True)
 
     def dump(self):
         return { 'RAW':self.get('RAW'), 'INTERPRETED':self.get('INTERPRETED') }
@@ -265,10 +274,12 @@ class DataController:
 class UI:
     def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRETED'):
         signal.signal(signal.SIGINT, self._ctrl_c_callback)
-        self.Screen = ScreenController(interaction_mode)
-        self.Data = DataController(record, interaction_mode, view_mode)
+        self.Screen = ScreenController()
+        self.Data = DataController(record)
         self.Wigets = WidgetController()
-        self.Wigets.update(self.Data.get(view_mode))
+
+        self._set_interaction_mode(interaction_mode)
+        self._set_view_mode(view_mode)
 
         self._exit_flag = False
         self.db_update_required = False
@@ -278,6 +289,7 @@ class UI:
         self.Data.interaction_mode = mode_id
         self.Screen.set_palette_mode(mode_id)
         self.Wigets.update({'interaction_mode':mode_id})
+        self.Wigets.body.keyword_widget_handler()
 
     def _set_view_mode(self, mode_id):
         # save text from current view before changing widget text
@@ -290,16 +302,15 @@ class UI:
         self.Data.update(self.Wigets.dump())
 
         if self.Data.is_interpreted:
-            if self.Data.interpreted_view.altered:
+            if self.Data.interpreted_view.is_altered():
                 tag, value = link.extract(self.Data.raw_view.body)
                 if tag == 'PATH':
-                    # write changes to linked file
+                    # Write changes to linked file
                     file_io.str_to_file(value, self.Data.interpreted_view.body)
-        # if uninterpreted, all view data is kept in sync
-        # if interpreted, changes to the raw record have been made
-        # both circumstances require an update to be made in the record database
-        if self.Data.raw_view.altered:
-            self.db_update_required = True
+        # If uninterpreted, all view data has been kept in sync.
+        # If interpreted, changes to the raw record have been made.
+        # Both circumstances require an update to be made in the record database
+        self.db_update_required = self.Data.raw_view.is_altered()
 
     def _ctrl_c_callback(self, sig, frame):
         self._safe_exit()
@@ -364,7 +375,7 @@ class UI:
                 if k == 'window resize':
                     size = self.Screen.get_cols_rows()
 
-                elif k == 'ctrl c':##########change this to ctrl c
+                elif k == 'ctrl c':
                     self._safe_exit()
 
                 elif k in self.Screen.scroll_actions and self.Wigets.focus_position == 'body':
@@ -375,7 +386,6 @@ class UI:
                         self._set_interaction_mode('COMMAND')
                     else:
                         self.Wigets.keypress(size, k)
-                        self.Data.altered()
 
                 elif self.Data.interaction_mode == 'COMMAND':
                     if k == 'ctrl l':
