@@ -26,6 +26,7 @@ class Title(urwid.Edit):
 
 
 class Header(urwid.Columns):
+    """ Container to hold ModeLabel and Title widgets """
     def __init__(self):
         palette_id = 'HEADER_BASE'
         super(Header, self).__init__(
@@ -82,22 +83,42 @@ class CommandFooter(urwid.Edit):
 
     def clear_text(self):
         self.set_edit_text('')
+        self.cmd_history.reset()
+
+    def cursor_left(self):
+        self.set_edit_pos(self.edit_pos-1)
+
+    def cursor_right(self):
+        self.set_edit_pos(self.edit_pos+1)
+
+    def cursor_home(self):
+        self.set_edit_pos(0)
+
+    def cursor_end(self):
+        self.set_edit_pos(len(self.edit_text))
 
     def scroll_history_up(self):
+        # Set to false so entered keypresses get appended to end of old command
+        self.clear_before_keypress = False
         past_command = self.cmd_history.prev()
         if past_command is not None:
             self.set_edit_text(past_command)
+        # Ensure new keypresses get appended to existing command footer text
+        self.cursor_end()
 
     def scroll_history_down(self):
+        # Set to false so entered keypresses get appended to end of old command
+        self.clear_before_keypress = False
         past_command = self.cmd_history.next()
         if past_command is not None:
             self.set_edit_text(past_command)
+        # Ensure new keypresses get appended to existing command footer text
+        self.cursor_end()
 
     def keypress(self, size, key):
         if self.clear_before_keypress:
+            self.clear_text()
             self.clear_before_keypress = False
-            self.set_edit_text('')
-
         super(CommandFooter, self).keypress(size, key)
 
 
@@ -107,14 +128,15 @@ class InsertFooter(urwid.Columns):
         palette_id = [self.palette_id, 'INSERT_FOOTER_HIGHLIGHT']
         super(InsertFooter, self).__init__(
             widget_list=[
-                ('pack', urwid.AttrMap(urwid.Text('^X'), palette_id[0])),
-                ('pack', urwid.AttrMap(urwid.Text(' Exit  '), palette_id[1])),
-                ('pack', urwid.AttrMap(urwid.Text('ESC'), palette_id[0])),
-                ('pack', urwid.AttrMap(urwid.Text(' Toggle Mode  '), palette_id[1]))
+                ('pack', urwid.AttrMap(urwid.Text(' ^C '), palette_id[0])),
+                ('pack', urwid.AttrMap(urwid.Text('Exit'), palette_id[1])),
+                ('pack', urwid.AttrMap(urwid.Text(' ESC '), palette_id[0])),
+                ('pack', urwid.AttrMap(urwid.Text('Toggle Mode'), palette_id[1]))
             ])
 
 
 class Content(urwid.ListBox):
+    """ Container to hold header, keywords, and body widgets """
     def __init__(self):
         self.keyword_widget = Keywords()
         super(Content, self).__init__(
@@ -151,6 +173,7 @@ class Content(urwid.ListBox):
 
 
 class Footer(urwid.WidgetPlaceholder):
+    """ Container to hold whichever footer should be shown for current mode """
     def __init__(self):
         self._attributes = { 'COMMAND': CommandFooter(), 'INSERT': InsertFooter() }
         super(Footer, self).__init__(
@@ -292,7 +315,7 @@ class UI:
         self.Wigets.body.keyword_widget_handler()
 
     def _set_view_mode(self, mode_id):
-        # save text from current view before changing widget text
+        # Save text from current view before changing widget text
         self.Data.update(self.Wigets.dump())
         self.Data.view_mode = mode_id
         self.Wigets.update(self.Data.get(mode_id))
@@ -393,15 +416,20 @@ class UI:
                     elif k == 'enter':
                         cmd_text = self.Wigets['footer'].get_edit_text()
                         self.Wigets['footer'].clear_text()
-
                         self._evaluate_command(cmd_text)
                         # if error results from entered command, clear error message before next keystroke appears
                         self.Wigets['footer'].clear_before_keypress = True
-
-                    ### fix to be able to scroll history letters left/right/home/end
                     elif k == 'shift up':
                         self.Wigets['footer'].scroll_history_up()
                     elif k == 'shift down':
                         self.Wigets['footer'].scroll_history_down()
+                    elif k == 'left':
+                        self.Wigets['footer'].cursor_left()
+                    elif k == 'right':
+                        self.Wigets['footer'].cursor_right()
+                    elif k == 'home':
+                        self.Wigets['footer'].cursor_home()
+                    elif k == 'end':
+                        self.Wigets['footer'].cursor_end()
                     else:
                         self.Wigets['footer'].keypress((1,), k)
