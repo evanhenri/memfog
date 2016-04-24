@@ -49,7 +49,7 @@ class BidirectionScrollList(list):
     def append(self, p_object):
         super(BidirectionScrollList, self).append(p_object)
         # reset tracked index to
-        self._i = len(self)
+        self.reset()
 
     def next(self):
         if self._i+1 == len(self):
@@ -62,6 +62,9 @@ class BidirectionScrollList(list):
             return None
         self._i -= 1
         return self[self._i]
+
+    def reset(self):
+        self._i = len(self)
 
 
 
