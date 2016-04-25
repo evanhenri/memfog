@@ -8,6 +8,7 @@ from . import instruction
 from . import util
 from . import file_io
 from . import file_sys
+from .data import Data
 
 class ModeLabel(urwid.Text):
     def __init__(self):
@@ -235,6 +236,7 @@ class WidgetController(urwid.Frame):
             self['body'].set_edit_text(data['body'])
 
 
+# TODO delete this class when done since it has been refactored out to data.py
 class ViewData:
     def __init__(self, record):
         self.title = record.title
@@ -263,19 +265,13 @@ class DataController:
         self.interaction_mode = ''
         self.view_mode = ''
 
-        self.raw_view = ViewData(record)
-        self.interpreted_view = ViewData(record)
-
-        for k,v in self.interpreted_view.dump().items():
-            setattr(self.interpreted_view, k, instruction.expand(v))
-
-        self.is_interpreted = self.get('RAW') != self.get('INTERPRETED')
+        self.data = Data(record)
 
     def dump(self):
         return { 'RAW':self.get('RAW'), 'INTERPRETED':self.get('INTERPRETED') }
 
     def get(self, view_mode):
-        switch = { 'RAW':self.raw_view.dump, 'INTERPRETED':self.interpreted_view.dump }
+        switch = { 'RAW':self.data.raw.dump, 'INTERPRETED':self.data.interpreted.dump }
         return { **switch[view_mode](), **{'interaction_mode':self.interaction_mode} }
 
     def update(self, view_data):
@@ -284,56 +280,60 @@ class DataController:
         If record data is not being interpreted, makes sure data from other views is kept in sync
         """
         if self.view_mode == 'RAW':
-            self.raw_view.update(view_data)
-            if not self.is_interpreted:
-                self.interpreted_view = self.raw_view
+            self.data.raw.update(view_data)
+            if not self.data.is_interpreted:
+                self.data.interpreted = self.data.raw
 
         elif self.view_mode == 'INTERPRETED':
-            self.interpreted_view.update(view_data)
-            if not self.is_interpreted:
-                self.raw_view = self.interpreted_view
+            self.data.interpreted.update(view_data)
+            if not self.data.is_interpreted:
+                self.data.raw = self.data.interpreted
 
 
 class UI:
     def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRETED'):
         signal.signal(signal.SIGINT, self._ctrl_c_callback)
-        self.Screen = ScreenController()
-        self.Data = DataController(record)
-        self.Wigets = WidgetController()
+        self.ScreenC = ScreenController()
+        self.DataC = DataController(record)
+        self.WigetC = WidgetController()
 
         self._set_interaction_mode(interaction_mode)
         self._set_view_mode(view_mode)
 
         self._exit_flag = False
         self.db_update_required = False
-        self.Screen.run_wrapper(self._run)
+        self.ScreenC.run_wrapper(self._run)
 
     def _set_interaction_mode(self, mode_id):
-        self.Data.interaction_mode = mode_id
-        self.Screen.set_palette_mode(mode_id)
-        self.Wigets.update({'interaction_mode':mode_id})
-        self.Wigets.body.keyword_widget_handler()
+        self.DataC.interaction_mode = mode_id
+        self.ScreenC.set_palette_mode(mode_id)
+        self.WigetC.update({'interaction_mode':mode_id})
+        self.WigetC.body.keyword_widget_handler()
 
     def _set_view_mode(self, mode_id):
         # Save text from current view before changing widget text
-        self.Data.update(self.Wigets.dump())
-        self.Data.view_mode = mode_id
-        self.Wigets.update(self.Data.get(mode_id))
+        self.DataC.update(self.WigetC.dump())
+        self.DataC.view_mode = mode_id
+        self.WigetC.update(self.DataC.get(mode_id))
 
     def _safe_exit(self):
         self._exit_flag = True
-        self.Data.update(self.Wigets.dump())
+        self.DataC.update(self.WigetC.dump())
 
-        if self.Data.is_interpreted:
-            if self.Data.interpreted_view.is_altered():
-                tag, value = instruction.extract(self.Data.raw_view.body)
-                if tag == 'PATH':
-                    # Write changes to linked file
-                    file_io.str_to_file(value, self.Data.interpreted_view.body)
+        # if self.DataC.data.is_interpreted:
+        #     if self.DataC.data.interpreted.is_altered():
+        #         tag, value = instruction.extract(self.Data.raw_view.body)
+        #         if tag == 'PATH':
+        #             # Write changes to linked file
+        #             file_io.str_to_file(value, self.Data.interpreted_view.body)
+
         # If uninterpreted, all view data has been kept in sync.
         # If interpreted, changes to the raw record have been made.
         # Both circumstances require an update to be made in the record database
-        self.db_update_required = self.Data.raw_view.is_altered()
+        self.db_update_required = self.DataC.data.raw.is_altered()
+
+        # TODO reimplement way to find changed content. Each widget has its own data class in data.py that tracks its
+        # starting and ending content hash. Use that
 
     def _ctrl_c_callback(self, sig, frame):
         self._safe_exit()
@@ -345,15 +345,15 @@ class UI:
 
         if not file_sys.check_path('w', fp):
             return 'Unable to export to \'{}\''.format(fp)
-        file_io.json_to_file(fp, self.Wigets.dump())
+        file_io.json_to_file(fp, self.WigetC.dump())
         return 'Exported to \'{}\''.format(fp)
 
     def _evaluate_command(self, cmd_text):
         if len(cmd_text) > 0:
-            self.Wigets['footer'].cmd_history.append(cmd_text)
+            self.WigetC['footer'].cmd_history.append(cmd_text)
 
             # extract :command pattern from cmd input field
-            cmd = self.Wigets['footer'].cmd_pattern.search(cmd_text)
+            cmd = self.WigetC['footer'].cmd_pattern.search(cmd_text)
 
             if cmd is not None:
                 cmd = cmd.group(0)
@@ -362,14 +362,14 @@ class UI:
                 if cmd == ':e' or cmd == ':export':
                     # If no filename/path was given, clear string to trigger default to be set in _export()
                     if args.startswith(cmd): args = ''
-                    result = self._export(args, self.Wigets.dump())
-                    self.Wigets['footer'].set_edit_text(result)
+                    result = self._export(args, self.WigetC.dump())
+                    self.WigetC['footer'].set_edit_text(result)
 
                 elif cmd == ':h' or cmd == ':help':
-                    self.Wigets['footer'].set_edit_text('[:e]xport <path>, [:i]nsert, [:q]uit, [:v]iew <mode>')
+                    self.WigetC['footer'].set_edit_text('[:e]xport <path>, [:i]nsert, [:q]uit, [:v]iew <mode>')
 
                 elif cmd == ':i' or cmd == ':insert':
-                    self.Wigets['footer'].set_edit_text('')
+                    self.WigetC['footer'].set_edit_text('')
                     self._set_interaction_mode('INSERT')
 
                 elif cmd == ':q' or cmd == ':quit':
@@ -379,57 +379,58 @@ class UI:
                     try:
                         self._set_view_mode(args.upper())
                     except KeyError:
-                        self.Wigets['footer'].set_edit_text('Valid views = \'raw\',\'interpreted\''.format(args))
+                        self.WigetC['footer'].set_edit_text('Valid views = \'raw\',\'interpreted\''.format(args))
             else:
-                self.Wigets['footer'].set_edit_text('Invalid command')
+                self.WigetC['footer'].set_edit_text('Invalid command')
+
 
     def _run(self):
-        size = self.Screen.get_cols_rows()
+        size = self.ScreenC.get_cols_rows()
 
         while not self._exit_flag:
-            canvas = self.Wigets.render(size, focus=True)
-            self.Screen.draw_screen(size, canvas)
+            canvas = self.WigetC.render(size, focus=True)
+            self.ScreenC.draw_screen(size, canvas)
             keys = None
 
             while not keys:
-                keys = self.Screen.get_input()
+                keys = self.ScreenC.get_input()
 
             for k in keys:
                 if k == 'window resize':
-                    size = self.Screen.get_cols_rows()
+                    size = self.ScreenC.get_cols_rows()
 
                 elif k == 'ctrl c':
                     self._safe_exit()
 
-                elif k in self.Screen.scroll_actions and self.Wigets.focus_position == 'body':
-                    self.Wigets.keypress(size, k)
+                elif k in self.ScreenC.scroll_actions and self.WigetC.focus_position == 'body':
+                    self.WigetC.keypress(size, k)
 
-                elif self.Data.interaction_mode == 'INSERT':
+                elif self.DataC.interaction_mode == 'INSERT':
                     if k == 'esc':
                         self._set_interaction_mode('COMMAND')
                     else:
-                        self.Wigets.keypress(size, k)
+                        self.WigetC.keypress(size, k)
 
-                elif self.Data.interaction_mode == 'COMMAND':
+                elif self.DataC.interaction_mode == 'COMMAND':
                     if k == 'ctrl l':
-                        self.Wigets['footer'].clear_text()
+                        self.WigetC['footer'].clear_text()
                     elif k == 'enter':
-                        cmd_text = self.Wigets['footer'].get_edit_text()
-                        self.Wigets['footer'].clear_text()
+                        cmd_text = self.WigetC['footer'].get_edit_text()
+                        self.WigetC['footer'].clear_text()
                         self._evaluate_command(cmd_text)
                         # if error results from entered command, clear error message before next keystroke appears
-                        self.Wigets['footer'].clear_before_keypress = True
+                        self.WigetC['footer'].clear_before_keypress = True
                     elif k == 'shift up':
-                        self.Wigets['footer'].scroll_history_up()
+                        self.WigetC['footer'].scroll_history_up()
                     elif k == 'shift down':
-                        self.Wigets['footer'].scroll_history_down()
+                        self.WigetC['footer'].scroll_history_down()
                     elif k == 'left':
-                        self.Wigets['footer'].cursor_left()
+                        self.WigetC['footer'].cursor_left()
                     elif k == 'right':
-                        self.Wigets['footer'].cursor_right()
+                        self.WigetC['footer'].cursor_right()
                     elif k == 'home':
-                        self.Wigets['footer'].cursor_home()
+                        self.WigetC['footer'].cursor_home()
                     elif k == 'end':
-                        self.Wigets['footer'].cursor_end()
+                        self.WigetC['footer'].cursor_end()
                     else:
-                        self.Wigets['footer'].keypress((1,), k)
+                        self.WigetC['footer'].keypress((1,), k)

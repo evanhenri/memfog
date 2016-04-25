@@ -4,12 +4,13 @@ import subprocess
 
 from . import file_io
 
+# TODO delete this file since it has been merged with data content in data.py
 keys = '|'.join(['PATH', 'EXEC'])
 # capture key and value when found in [key](value) format and key is in keys
 _pattern = re.compile('(?:\[)(' + keys + ')(?:\]\()(.*?)(?:\))')
 
 
-def expand(s):
+def interpret(s):
     for match in _pattern.finditer(s):
         key, value = match.groups()
         value = os.path.expanduser(value)
@@ -23,8 +24,11 @@ def expand(s):
             s += errors
     return s
 
-def extract(s):
-    for match in _pattern.finditer(s):
-        return match.groups()
+def interpret(s):
+    return [match.groups() for match in _pattern.finditer(s)]
+
+# def extract(s):
+#     for match in _pattern.finditer(s):
+#         return match.groups()
 
 
