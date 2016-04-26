@@ -36,23 +36,24 @@ def standardize(s):
     stripped = strip_punctuation(s).lower()
     return shlex.shlex(stripped)
 
-class BidirectionScrollList(list):
+class UniqueNeighborScrollList(list):
     """
     built-in list() wrapper with next and prev functionality
     Returns next/previous value from sequence or None if next/previous would go outside of sequence bounds
     Index used to track next/previous item begins after most recent item in list and resets each time a new item is added
     """
     def __init__(self, lst=[]):
-        super(BidirectionScrollList, self).__init__(lst)
+        super(UniqueNeighborScrollList, self).__init__(lst)
         self._i = len(self)
 
     def append(self, p_object):
-        super(BidirectionScrollList, self).append(p_object)
-        # reset tracked index to
+        # Do not append to self if current element equals previous element
+        if len(self) == 0 or len(self) > 0 and self[-1] != p_object:
+            super(UniqueNeighborScrollList, self).append(p_object)
         self.reset()
 
     def next(self):
-        if self._i+1 == len(self):
+        if self._i+1 >= len(self):
             return None
         self._i += 1
         return self[self._i]
