@@ -27,6 +27,7 @@ class Raw:
         self.body = Body(record.body)
 
     def dump(self):
+        # FIXME crash when switching from RAW to INTERPRETED with traceback to this line
         return { 'title':self.title.text, 'keywords':self.keywords.text, 'body':self.body.text }
 
     def get_altered_attr(self):
@@ -43,33 +44,39 @@ class Raw:
 class Interpreted(Raw):
     def __init__(self, record):
         super(Interpreted, self).__init__(record)
-        self._pattern = re.compile('(?:\[)(PATH|EXEC)(?:\]\()(.*?)(?:\))')
+        self._pattern = re.compile(
+            """                 # ?: denotes non-capture group - group that must be matched but excluded from the result
+                (?:\[)          # Match \[
+                (PATH|EXEC)     # Text between braces can be either PATH or EXEC
+                (?:\]\()        # Match \]\(
+                (.*?)           # >= 0 characters between parenthesis
+                (?:\))          # Macth \)
+            """, re.VERBOSE)
 
-        [self._process(attr) for attr in ['title','keywords','body']]
+        self.title.text = self._process(self.title.text)
+        self.keywords.text = self._process(self.keywords.text)
+        self.body.text = self._process(self.body.text)
 
-
-    def _process(self, attr_id):
-        attr = getattr(self, attr_id)
-        text = getattr(attr, 'text')
-
-        for match in self._pattern.finditer(text):
+    def _process(self, s):
+        for match in self._pattern.finditer(s):
             key, val = match.groups()
             val = ' '.join(map(os.path.expanduser, val.split()))
 
             if key == 'PATH':
-                text = text.replace(match.group(0), file_io.str_from_file(val))
+                file_content = file_io.str_from_file(val)
+                s = s.replace(match.group(0), file_content)
 
             elif key == 'EXEC':
-                print('!!!')
                 proc = subprocess.Popen(val, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
                 std_out, std_err = proc.communicate(timeout=5)
-                text = text.replace(match.group(0), std_out.decode() + std_err.decode())
-                print(text)
+                proc.wait(timeout=5)
+                proc_result = std_out.decode() + std_err.decode()
+                s = s.replace(match.group(0), proc_result)
 
-            self.__dict__[attr_id].text = text
-            #FIXME PATH and EXEC output are being interpretted successfully, but embedded instruction still appears in text
-            # in addition to interpretted content
-
+        # even though instruction is interpretted properly, some instructions still exist in output in addition
+        # to their interpretted text. Substitute with empty string temporarily so they don't appear in UI
+        s = re.sub(self._pattern, '', s)
+        return s
 
 class Data:
     def __init__(self, record):
