@@ -27,7 +27,6 @@ class Raw:
         self.body = Body(record.body)
 
     def dump(self):
-        # FIXME crash when switching from RAW to INTERPRETED with traceback to this line
         return { 'title':self.title.text, 'keywords':self.keywords.text, 'body':self.body.text }
 
     def get_altered_attr(self):
@@ -39,7 +38,8 @@ class Raw:
         return altered_attributes
 
     def update(self, args):
-        self.__dict__.update(args)
+        for attr_id, attr_val in args.items():
+            self.__dict__[attr_id].text = attr_val
 
 class Interpreted(Raw):
     def __init__(self, record):
