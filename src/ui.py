@@ -4,7 +4,7 @@ import signal
 import os
 import re
 
-from . import instruction
+
 from . import util
 from . import file_io
 from . import file_sys
@@ -80,7 +80,7 @@ class CommandFooter(urwid.Edit):
         self.palette_id = 'COMMAND_FOOTER_BASE'
         self.cmd_pattern = re.compile('(:.\S*)')
         self.clear_before_keypress = False
-        self.cmd_history = util.BidirectionScrollList()
+        self.cmd_history = util.UniqueNeighborScrollList()
 
     def clear_text(self):
         self.set_edit_text('')
@@ -236,28 +236,6 @@ class WidgetController(urwid.Frame):
             self['body'].set_edit_text(data['body'])
 
 
-# TODO delete this class when done since it has been refactored out to data.py
-class ViewData:
-    def __init__(self, record):
-        self.title = record.title
-        self.keywords = record.keywords
-        self.body = record.body
-        self.starting_content_hash = self.content_hash()
-
-    def content_hash(self):
-        return hash(self.title + self.keywords + self.body)
-
-    def dump(self):
-        exclusions = { 'starting_content_hash' }
-        return { k:v for k,v in self.__dict__.items() if k not in exclusions }
-
-    def is_altered(self):
-        return self.starting_content_hash != self.content_hash()
-
-    def update(self, args):
-        self.__dict__.update(args)
-
-
 class DataController:
     def __init__(self, record):
         self.modes = ['COMMAND', 'INSERT', 'RAW', 'INTERPRETED']
@@ -380,6 +358,8 @@ class UI:
                         self._set_view_mode(args.upper())
                     except KeyError:
                         self.WigetC['footer'].set_edit_text('Valid views = \'raw\',\'interpreted\''.format(args))
+                else:
+                    self.WigetC['footer'].set_edit_text('Invalid command')
             else:
                 self.WigetC['footer'].set_edit_text('Invalid command')
 
