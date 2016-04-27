@@ -298,12 +298,8 @@ class UI:
         self._exit_flag = True
         self.DataC.update(self.WigetC.dump())
 
-        # if self.DataC.data.is_interpreted:
-        #     if self.DataC.data.interpreted.is_altered():
-        #         tag, value = instruction.extract(self.Data.raw_view.body)
-        #         if tag == 'PATH':
-        #             # Write changes to linked file
-        #             file_io.str_to_file(value, self.Data.interpreted_view.body)
+        if self.DataC.data.is_interpreted:
+            self.DataC.data.interpreted.update_sources()
 
         # If uninterpreted, all view data has been kept in sync.
         # If interpreted, changes to the raw record have been made.

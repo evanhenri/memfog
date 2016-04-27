@@ -5,20 +5,28 @@ import subprocess
 from . import file_io
 
 
-class Title:
+class DataItem:
     def __init__(self, text):
         self.text = text
-        self.starting_hash = hash(self.text)
+        self.instructions = []
+        self.starting_state = hash(self.text)
 
-class Keywords:
-    def __init__(self, text):
-        self.text = text
-        self.starting_hash = hash(self.text)
+    def is_altered(self):
+        return self.starting_state != hash(self.text)
 
-class Body:
+
+class Title(DataItem):
     def __init__(self, text):
-        self.text = text
-        self.starting_hash = hash(self.text)
+        super(Title, self).__init__(text)
+
+class Keywords(DataItem):
+    def __init__(self, text):
+        super(Keywords, self).__init__(text)
+
+class Body(DataItem):
+    def __init__(self, text):
+        super(Body, self).__init__(text)
+
 
 class Raw:
     def __init__(self, record):
@@ -41,6 +49,7 @@ class Raw:
         for attr_id, attr_val in args.items():
             self.__dict__[attr_id].text = attr_val
 
+
 class Interpreted(Raw):
     def __init__(self, record):
         super(Interpreted, self).__init__(record)
@@ -53,36 +62,55 @@ class Interpreted(Raw):
                 (?:\))          # Macth \)
             """, re.VERBOSE)
 
-        self.title.text = self._process(self.title.text)
-        self.keywords.text = self._process(self.keywords.text)
-        self.body.text = self._process(self.body.text)
+        self.title = self._process(self.title)
+        self.keywords = self._process(self.keywords)
+        self.body = self._process(self.body)
 
-    def _process(self, s):
-        for match in self._pattern.finditer(s):
+    def _process(self, data_item):
+        for match in self._pattern.finditer(data_item.text):
             key, val = match.groups()
             val = ' '.join(map(os.path.expanduser, val.split()))
+            data_item.instructions.append(tuple([key, val]))
 
             if key == 'PATH':
                 file_content = file_io.str_from_file(val)
-                s = s.replace(match.group(0), file_content)
+                data_item.text = data_item.text.replace(match.group(0), file_content)
 
             elif key == 'EXEC':
                 proc = subprocess.Popen(val, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
                 std_out, std_err = proc.communicate(timeout=5)
                 proc.wait(timeout=5)
                 proc_result = std_out.decode() + std_err.decode()
-                s = s.replace(match.group(0), proc_result)
+                data_item.text = data_item.text.replace(match.group(0), proc_result)
 
         # even though instruction is interpretted properly, some instructions still exist in output in addition
         # to their interpretted text. Substitute with empty string temporarily so they don't appear in UI
-        s = re.sub(self._pattern, '', s)
-        return s
+        data_item.text = re.sub(self._pattern, '', data_item.text)
+        return data_item
+
+    def update_sources(self):
+        if self.title.is_altered():
+            for key,val in self.title.instructions:
+                if key == 'PATH':
+                    file_io.str_to_file(val, self.title.text)
+        if self.keywords.is_altered():
+            for key,val in self.keywords.instructions:
+                if key == 'PATH':
+                    file_io.str_to_file(val, self.keywords.text)
+        if self.body.is_altered():
+            for key,val in self.body.instructions:
+                if key == 'PATH':
+                    file_io.str_to_file(val, self.body.text)
 
 class Data:
     def __init__(self, record):
         self.raw = Raw(record)
         self.interpreted = Interpreted(record)
         self.is_interpreted = self.raw.dump() != self.interpreted.dump()
+
+
+
+
 
 
 
