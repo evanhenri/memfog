@@ -16,67 +16,89 @@ Options:
 #   -r --raw      Display raw links in record rather than content being linked to
 from docopt import docopt
 from fuzzywuzzy import fuzz
+import threading
+import queue
 from more_itertools import unique_everseen
 import datetime
 import os
 
-from src import file_io, file_sys, instruction, ui, user, util
-from src.db import Database, Record
+from src import file_io, file_sys, ui, user, util, database, record
+from src.proxy import Flags
+
+config = None
+
+
+class DataHandler:
+    def __init__(self):
+        self.db = database.Database(config.db_fp)
+        self.recs = record.RecordGroup(self.db.session.query(record.Record))
+
+class QHandler:
+    def __init__(self):
+        self.dh = DataHandler()
+        self.recv_queue = queue.Queue()
+        self.send_queue = queue.Queue()
+        # FIXME long delay occurs before ui loads, but it does load correctly and is functional
+        #   however when trying to quit, it freezes and does not exit
+        #   Tried changing from multiprocess to threading but same dely occurs
+        #   Tried passing in queue's separately instead of Qhandler instances but same thing happened
+
+    def listen(self):
+        while True:
+            flag, *args = self.recv_queue.get()
+            print(flag, *args, '000000000000000000000000000000000000000')
+
+            switch = {
+                Flags.INSERTRECORD : self.dh.db.insert,
+                Flags.UPDATERECORD : self.dh.db.update
+            }
+
+            switch[flag](*args)
 
 class Memfog:
-    def __init__(self, config):
-        self.config = config
-        self.excluded_words = file_io.set_from_file(self.config.exclusions_fp)
-        self.DB = Database(self.config.db_fp)
-        self.Records = { Rec.title:Rec for Rec in self.DB.session.query(Record).all() }
+    def __init__(self):
+        self.dh = DataHandler()
+        self.qh = QHandler()
+
+        t = threading.Thread(target=self.qh.listen)
+        t.daemon = True
+        t.start()
+
+        self.excluded_words = file_io.set_from_file(config.exclusions_fp)
 
     def create_rec(self):
-        """ Initializes a new Record object which is passed to the command line interface. The empty Record's
-        data members are then be set according to the user's text input """
-        Rec = Record()
+        rec = record.Record()
+        self.qh.send_queue.put(Flags.INSERTRECORD)
+        Gui = ui.UI(self.qh.send_queue, self.qh.recv_queue, rec, 'INSERT')
 
-        # construct Record from data entered into UI. Start UI in INSERT mode since a new record is being created
-        Gui = ui.UI(Rec, 'INSERT')
-
-        if Gui.db_update_required:
-            [setattr(Rec, k, v) for k,v in Gui.Data.raw_view.dump().items()]
-            self.DB.insert(Rec)
+        # if Gui.db_update_required:
+        #     [setattr(rec, k, v) for k,v in Gui.Data.raw_view.dump().items()]
+        #     self.DB.insert(rec)
 
     def display_rec(self, user_keywords):
-        """
-        :type user_keywords: str
-        Initializes command line interface with user selected Record. Data members in Record are used to
-        populate the UI widget fields with text prior to displaying them on screen
-        """
         while True:
             try:
                 Rec_fuzz_matches = self._fuzzy_match(user_keywords)
-                Rec = self.display_rec_list(Rec_fuzz_matches, 'Display')
+                rec = self.display_rec_list(Rec_fuzz_matches, 'Display')
             except KeyboardInterrupt:
                 break
 
-            # Rec is None when user enters an invalid record selection or hits ENTER with no selection
-            if Rec is not None:
+            if rec is not None:
                 # if not self.config.raw_links:
                 #     Rec.body = link.expand(Rec.body)
 
-                Gui = ui.UI(Rec)
+                self.qh.send_queue.put(Flags.UPDATERECORD)
+                Gui = ui.UI(self.qh.send_queue, self.qh.recv_queue, rec)
 
-                if Gui.db_update_required:
-                    updated_keys = util.k_intersect_v_diff(Rec.dump(), Gui.Data.raw_view.dump())
-                    [setattr(Rec, k, getattr(Gui.Data.raw_view, k)) for k in updated_keys]
-                    self.DB.update(Rec, updated_keys)
+                # if Gui.db_update_required:
+                #     updated_keys = util.k_intersect_v_diff(Rec.dump(), Gui.Data.raw_view.dump())
+                #     [setattr(Rec, k, getattr(Gui.Data.raw_view, k)) for k in updated_keys]
+                #     self.DB.update(Rec, updated_keys)
             else:
                 break
 
     def display_rec_list(self, Rec_fuzz_matches, action_description):
-        """
-        :type Rec_fuzz_matches: list of Record objects
-        :type action_description: str
-        :returns: Record object or None
-        Prints record titles in descending order by their match percentage to the users keyword input
-        """
-        if len(self.Records) > 0:
+        if len(self.dh.recs) > 0:
             print('{} which record?'.format(action_description))
 
             for i,Rec in enumerate(Rec_fuzz_matches):
@@ -85,7 +107,7 @@ class Memfog:
             selection = user.get_input()
 
             if selection is not None:
-                if selection < len(self.Records):
+                if selection < len(self.dh.recs):
                     return Rec_fuzz_matches[selection]
                 else:
                     print('Invalid record selection \'{}\''.format(selection))
@@ -93,10 +115,6 @@ class Memfog:
             print('No records exist')
 
     def export_recs(self, export_path):
-        """
-        :type export_path: str
-        Exports a json file of all records in database to directory at path dp
-        """
         date = datetime.datetime.now()
         default_filename = 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
         target_path = os.getcwd() + '/' + default_filename
@@ -118,46 +136,36 @@ class Memfog:
             if not user.prompt_yn('Overwrite existing file {}'.format(target_path)):
                 return
 
-        rec_backups = [ Rec.dump() for Rec in self.Records.values() ]
+        rec_backups = [ Rec.dump() for Rec in self.dh.recs ]
         file_io.json_to_file(target_path, rec_backups)
         print('Exported to ' + target_path)
 
     def _fuzzy_match(self, user_input):
-        """
-        :type user_input: str
-        :returns: top_n Records from self.records sorted by Record.search_score in ascending order
-        Takes a set of string for each record from the header and keywords and uses the set to
-        perform fuzzy string matching to calculate match percentage to the user_input keywords
-        """
         user_keywords = ''.join(unique_everseen(util.standardize(user_input)))
 
-        for Rec in self.Records.values():
-            keyword_set = Rec.make_set()
+        for rec in self.dh.recs:
+            keyword_set = rec.make_set()
             keyword_set.difference_update(self.excluded_words)
             keywords = ' '.join(keyword_set)
             score = (fuzz.token_sort_ratio(keywords, user_keywords) + fuzz.token_set_ratio(keywords, user_keywords)) / 2
-            Rec.search_score = score
+            rec.search_score = score
 
-        return [*sorted(self.Records.values())][-self.config.top_n::]
+        return [*sorted(self.dh.recs)][-config.top_n::]
 
     def import_recs(self, fp):
-        """
-        :type fp: str
-        Imports record from a json file located at fp by individually inserting them into the database
-        """
         imported_records = file_io.json_from_file(fp)
         skipped_imports = 0
         new_records = []
 
-        for record in imported_records:
-            if record['title'] not in self.Records or self.config.force_import:
-                new_records.append(Record(**record))
+        for rec in imported_records:
+            if rec['title'] not in self.dh.recs or config.force_import:
+                new_records.append(rec.Record(**rec))
             else:
                 skipped_imports += 1
-                print('Skipping duplicate - {}'.format(record['title']))
+                print('Skipping duplicate - {}'.format(rec['title']))
 
         if len(new_records) > 0:
-            self.DB.bulk_insert(new_records)
+            self.dh.db.bulk_insert(new_records)
 
         if skipped_imports > 0:
             print('Imported {}, Skipped {}'.format(len(imported_records) - skipped_imports, skipped_imports))
@@ -165,23 +173,18 @@ class Memfog:
             print('Imported {}'.format(len(imported_records) - skipped_imports))
 
     def remove_rec(self, user_input):
-        """
-        :type user_input: str
-        Displays records matching user input and removes the selected record from database
-        """
         while True:
             Rec_fuzz_matches = self._fuzzy_match(user_input)
-            Rec = self.display_rec_list(Rec_fuzz_matches, 'Remove')
+            recs = self.display_rec_list(Rec_fuzz_matches, 'Remove')
 
-            if Rec and user.prompt_yn('Delete {}'.format(Rec.title)):
-                self.DB.remove(Rec)
-                del self.Records[Rec.title]
-                Rec_fuzz_matches.remove(Rec)
+            if recs and user.prompt_yn('Delete {}'.format(recs.title)):
+                self.dh.db.remove(recs)
+                del self.dh.recs[recs.title]
+                Rec_fuzz_matches.remove(recs)
             else:
                 break
 
 class Config:
-    """ Contains application configuration settings """
     def __init__(self, argv):
         self.repo_dp = os.path.dirname(os.path.realpath(__file__))
         self.datadir_fp = self.repo_dp + '/datadir'
@@ -203,8 +206,7 @@ class Config:
                 exit()
 
 def main(argv):
-    Conf = Config(argv)
-    memfog = Memfog(Conf)
+    memfog = Memfog()
 
     user_input = ' '.join(argv['<keyword>'])
 
@@ -216,11 +218,12 @@ def main(argv):
         memfog.export_recs(argv['<dirpath>'])
     elif argv['import']:
         memfog.import_recs(argv['<filepath>'])
-    elif len(memfog.Records) > 0:
+    elif len(memfog.dh.recs) > 0:
         memfog.display_rec(user_input)
     else:
         print('No memories exist')
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.6.2.3')
-    main(args)
+    cli_args = docopt(__doc__, version='memfog v1.6.2.3')
+    config = Config(cli_args)
+    main(cli_args)
