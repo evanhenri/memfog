@@ -2,8 +2,6 @@ from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from . import util
-
 Base = declarative_base()
 
 class Database:
@@ -26,15 +24,14 @@ class Database:
         self.session.commit()
 
     def remove(self, Rec):
-        self.session.query(Record).filter_by(row_id=Rec.row_id).delete()
+        self.session.query(RecordMap).filter_by(row_id=Rec.row_id).delete()
         self.session.commit()
 
-    def update(self, Rec, keys={}):
-        updated_fields = { k:v for k,v in Rec.dump().items() if k in keys }
-        self.session.query(Record).filter_by(row_id=Rec.row_id).update(updated_fields)
+    def update(self, rec_id, updated_fields):
+        self.session.query(RecordMap).filter_by(row_id=rec_id).update(updated_fields)
         self.session.commit()
 
-class Record(Base):
+class RecordMap(Base):
     __tablename__ = 'record'
     row_id = Column('row_id', Integer, primary_key=True)
     title = Column('title', String, nullable=False)
@@ -46,19 +43,4 @@ class Record(Base):
         self.title = title
         self.keywords = keywords
         self.body = body
-        self.search_score = 0
-
-    def __gt__(self, other_memory):
-        return self.search_score > other_memory.search_score
-
-    def __repr__(self):
-        return 'Memory {}: {}'.format(self.__dict__.items())
-
-    def dump(self):
-        return { 'title':self.title,'keywords':self.keywords,'body':self.body }
-
-    def make_set(self):
-        # body text is not include in string match
-        m_data = ' '.join([self.title, self.keywords])
-        return set(util.standardize(m_data))
 

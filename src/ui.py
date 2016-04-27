@@ -237,13 +237,14 @@ class WidgetController(urwid.Frame):
 
 
 class DataController:
-    def __init__(self, record):
-        self.modes = ['COMMAND', 'INSERT', 'RAW', 'INTERPRETED']
+    def __init__(self, recv_queue, send_queue, record):
+        self.recv_queue = recv_queue
+        self.send_queue = send_queue
+
+        self.data = Data(record)
 
         self.interaction_mode = ''
         self.view_mode = ''
-
-        self.data = Data(record)
 
     def dump(self):
         return { 'RAW':self.get('RAW'), 'INTERPRETED':self.get('INTERPRETED') }
@@ -269,10 +270,11 @@ class DataController:
 
 
 class UI:
-    def __init__(self, record, interaction_mode='COMMAND', view_mode='INTERPRETED'):
+    def __init__(self, recv_queue, send_queue, record, interaction_mode='COMMAND', view_mode='INTERPRETED'):
         signal.signal(signal.SIGINT, self._ctrl_c_callback)
+
         self.ScreenC = ScreenController()
-        self.DataC = DataController(record)
+        self.DataC = DataController(recv_queue, send_queue, record)
         self.WigetC = WidgetController()
 
         self._set_interaction_mode(interaction_mode)
@@ -280,6 +282,7 @@ class UI:
 
         self._exit_flag = False
         self.db_update_required = False
+
         self.ScreenC.run_wrapper(self._run)
 
     def _set_interaction_mode(self, mode_id):
@@ -297,17 +300,13 @@ class UI:
     def _safe_exit(self):
         self._exit_flag = True
         self.DataC.update(self.WigetC.dump())
+        rec = self.DataC.data.get_altered_fields()
 
         if self.DataC.data.is_interpreted:
             self.DataC.data.interpreted.update_sources()
 
-        # If uninterpreted, all view data has been kept in sync.
-        # If interpreted, changes to the raw record have been made.
-        # Both circumstances require an update to be made in the record database
-        self.db_update_required = self.DataC.data.raw.is_altered()
-
-        # TODO reimplement way to find changed content. Each widget has its own data class in data.py that tracks its
-        # starting and ending content hash. Use that
+        context_flag = self.DataC.recv_queue.get()
+        self.DataC.send_queue.put(context_flag, self.DataC.data.rec_id, rec)
 
     def _ctrl_c_callback(self, sig, frame):
         self._safe_exit()

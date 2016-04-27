@@ -62,11 +62,11 @@ class Interpreted(Raw):
                 (?:\))          # Macth \)
             """, re.VERBOSE)
 
-        self.title = self._process(self.title)
-        self.keywords = self._process(self.keywords)
-        self.body = self._process(self.body)
+        self.title = self._interpret(self.title)
+        self.keywords = self._interpret(self.keywords)
+        self.body = self._interpret(self.body)
 
-    def _process(self, data_item):
+    def _interpret(self, data_item):
         for match in self._pattern.finditer(data_item.text):
             key, val = match.groups()
             val = ' '.join(map(os.path.expanduser, val.split()))
@@ -104,9 +104,30 @@ class Interpreted(Raw):
 
 class Data:
     def __init__(self, record):
+        self.rec_id = record.row_id
+
         self.raw = Raw(record)
         self.interpreted = Interpreted(record)
         self.is_interpreted = self.raw.dump() != self.interpreted.dump()
+
+    def get_altered_fields(self):
+        rec = {}
+        if self.is_interpreted:
+            if self.interpreted.title.is_altered():
+                rec['title'] = self.interpreted.title.text
+            if self.interpreted.keywords.is_altered():
+                rec['keywords'] = self.interpreted.keywords.text
+            if self.interpreted.body.is_altered():
+                rec['body'] = self.interpreted.body.text
+        else:
+            if self.raw.title.is_altered():
+                rec['title'] = self.raw.title.text
+            if self.raw.keywords.is_altered():
+                rec['keywords'] = self.raw.keywords.text
+            if self.raw.body.is_altered():
+                rec['body'] = self.raw.body.text
+        return rec
+
 
 
 
