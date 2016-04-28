@@ -224,11 +224,6 @@ def main(argv):
         print('No memories exist')
 
 if __name__ == '__main__':
-    cli_args = docopt(__doc__, version='memfog v1.6.2.3')
+    cli_args = docopt(__doc__, version='memfog v1.6.3')
     config = Config(cli_args)
     main(cli_args)
-
-
-# TODO add command line footer option to refresh record without exiting ui
-#   if instruction was EXEC and changed it to PATH, :r would refresh so you would
-#   see the content at that path in the UI
