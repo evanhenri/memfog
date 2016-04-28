@@ -6,8 +6,8 @@ class Record(database.RecordMap):
         super(Record, self).__init__(row_id, title, keywords, body)
         self.search_score = 0
 
-    def __gt__(self, other_memory):
-        return self.search_score > other_memory.search_score
+    def __gt__(self, other_record):
+        return self.search_score > other_record.search_score
 
     def __repr__(self):
         return 'Memory {}: {}'.format(self.__dict__.items())
@@ -22,7 +22,7 @@ class Record(database.RecordMap):
 
 class RecordGroup:
     def __init__(self, db_stream):
-        self._records = { rec.title:rec for rec in db_stream }
+        self._records = { record.title:record for record in db_stream }
 
     def __len__(self):
         return len(self._records)
