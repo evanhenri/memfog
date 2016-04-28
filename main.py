@@ -16,89 +16,91 @@ Options:
 #   -r --raw      Display raw links in record rather than content being linked to
 from docopt import docopt
 from fuzzywuzzy import fuzz
-import threading
-import queue
+import multiprocessing
 from more_itertools import unique_everseen
 import datetime
 import os
+import time
 
-from src import file_io, file_sys, ui, user, util, database, record
+from src import file_io, file_sys, ui, user, util
+from src.record import Record, RecordGroup
+from src.database import Database
 from src.proxy import Flags
 
 config = None
 
 
-class DataHandler:
-    def __init__(self):
-        self.db = database.Database(config.db_fp)
-        self.recs = record.RecordGroup(self.db.session.query(record.Record))
+class ProcessHandler(multiprocessing.Process):
+    """ Consumer that handles processing messages put in queue by UI """
+    def __init__(self, q):
+        super(ProcessHandler, self).__init__()
+        self.daemon = True
+        self.db = Database(config.db_fp)
+        self.q = q
 
-class QHandler:
-    def __init__(self):
-        self.dh = DataHandler()
-        self.recv_queue = queue.Queue()
-        self.send_queue = queue.Queue()
-        # FIXME long delay occurs before ui loads, but it does load correctly and is functional
-        #   however when trying to quit, it freezes and does not exit
-        #   Tried changing from multiprocess to threading but same dely occurs
-        #   Tried passing in queue's separately instead of Qhandler instances but same thing happened
+    def get_db_stream(self):
+        return self.db.session.query(Record)
 
-    def listen(self):
+    def run(self):
         while True:
-            flag, *args = self.recv_queue.get()
-            print(flag, *args, '000000000000000000000000000000000000000')
+            context = self.q.get()
 
             switch = {
-                Flags.INSERTRECORD : self.dh.db.insert,
-                Flags.UPDATERECORD : self.dh.db.update
+                Flags.INSERTRECORD : self.db.insert,
+                Flags.UPDATERECORD : self.db.update,
+                Flags.DELETERECORD : self.db.delete
             }
 
-            switch[flag](*args)
+            switch[context.flag](context)
+
+            # if context.flag == Flags.INSERTRECORD:
+            #     self.db.insert(context)
+            #
+            # elif context.flag == Flags.UPDATERECORD:
+            #     self.db.update(context)
+            #
+            # elif context.flag == Flags.DELETERECORD:
+            #     self.db.delete(context)
+
+            # Notify UI process that context has been fully processed and it can resume execution
+            self.q.task_done()
+
+class QContext:
+    """ Message passed between producer (UI) and consumer (ProcessHandler) using queue """
+    def __init__(self, record, interaction_mode, view_mode, flag):
+        self.record = record
+        self.interaction_mode = interaction_mode
+        self.view_mode = view_mode
+        self.flag = flag
+        self.altered_fields = set()
 
 class Memfog:
     def __init__(self):
-        self.dh = DataHandler()
-        self.qh = QHandler()
-
-        t = threading.Thread(target=self.qh.listen)
-        t.daemon = True
-        t.start()
-
-        self.excluded_words = file_io.set_from_file(config.exclusions_fp)
+        self.q = multiprocessing.JoinableQueue()
+        ph = ProcessHandler(self.q)
+        self.record_group = RecordGroup(ph.get_db_stream())
+        ph.start()
 
     def create_rec(self):
-        rec = record.Record()
-        self.qh.send_queue.put(Flags.INSERTRECORD)
-        Gui = ui.UI(self.qh.send_queue, self.qh.recv_queue, rec, 'INSERT')
-
-        # if Gui.db_update_required:
-        #     [setattr(rec, k, v) for k,v in Gui.Data.raw_view.dump().items()]
-        #     self.DB.insert(rec)
+        context = QContext(Record(), 'INSERT', 'RAW', Flags.INSERTRECORD)
+        ui.UI(context, self.q)
 
     def display_rec(self, user_keywords):
         while True:
             try:
                 Rec_fuzz_matches = self._fuzzy_match(user_keywords)
-                rec = self.display_rec_list(Rec_fuzz_matches, 'Display')
+                record = self.display_rec_list(Rec_fuzz_matches, 'Display')
             except KeyboardInterrupt:
                 break
 
-            if rec is not None:
-                # if not self.config.raw_links:
-                #     Rec.body = link.expand(Rec.body)
-
-                self.qh.send_queue.put(Flags.UPDATERECORD)
-                Gui = ui.UI(self.qh.send_queue, self.qh.recv_queue, rec)
-
-                # if Gui.db_update_required:
-                #     updated_keys = util.k_intersect_v_diff(Rec.dump(), Gui.Data.raw_view.dump())
-                #     [setattr(Rec, k, getattr(Gui.Data.raw_view, k)) for k in updated_keys]
-                #     self.DB.update(Rec, updated_keys)
+            if record is not None:
+                context = QContext(record, 'COMMAND', 'INTERPRETED', Flags.UPDATERECORD)
+                ui.UI(context, self.q)
             else:
                 break
 
     def display_rec_list(self, Rec_fuzz_matches, action_description):
-        if len(self.dh.recs) > 0:
+        if len(self.record_group) > 0:
             print('{} which record?'.format(action_description))
 
             for i,Rec in enumerate(Rec_fuzz_matches):
@@ -107,7 +109,7 @@ class Memfog:
             selection = user.get_input()
 
             if selection is not None:
-                if selection < len(self.dh.recs):
+                if selection < len(self.record_group):
                     return Rec_fuzz_matches[selection]
                 else:
                     print('Invalid record selection \'{}\''.format(selection))
@@ -136,36 +138,34 @@ class Memfog:
             if not user.prompt_yn('Overwrite existing file {}'.format(target_path)):
                 return
 
-        rec_backups = [ Rec.dump() for Rec in self.dh.recs ]
+        rec_backups = [ Rec.dump() for Rec in self.record_group ]
         file_io.json_to_file(target_path, rec_backups)
         print('Exported to ' + target_path)
 
     def _fuzzy_match(self, user_input):
         user_keywords = ''.join(unique_everseen(util.standardize(user_input)))
 
-        for rec in self.dh.recs:
-            keyword_set = rec.make_set()
-            keyword_set.difference_update(self.excluded_words)
-            keywords = ' '.join(keyword_set)
-            score = (fuzz.token_sort_ratio(keywords, user_keywords) + fuzz.token_set_ratio(keywords, user_keywords)) / 2
-            rec.search_score = score
+        for record in self.record_group:
+            keywords = ' '.join(record.make_set())
+            record.search_score = (fuzz.token_sort_ratio(keywords, user_keywords) + fuzz.token_set_ratio(keywords, user_keywords)) / 2
 
-        return [*sorted(self.dh.recs)][-config.top_n::]
+        return [*sorted(self.record_group)][-config.top_n::]
 
     def import_recs(self, fp):
         imported_records = file_io.json_from_file(fp)
         skipped_imports = 0
         new_records = []
 
-        for rec in imported_records:
-            if rec['title'] not in self.dh.recs or config.force_import:
-                new_records.append(rec.Record(**rec))
+        for kwargs in imported_records:
+            if kwargs['title'] not in self.record_group or config.force_import:
+                new_records.append(Record(**kwargs))
             else:
                 skipped_imports += 1
-                print('Skipping duplicate - {}'.format(rec['title']))
+                print('Skipping duplicate - {}'.format(kwargs['title']))
 
         if len(new_records) > 0:
-            self.dh.db.bulk_insert(new_records)
+            ##### process should be only one accessing db
+            self.db.bulk_insert(new_records)
 
         if skipped_imports > 0:
             print('Imported {}, Skipped {}'.format(len(imported_records) - skipped_imports, skipped_imports))
@@ -175,12 +175,14 @@ class Memfog:
     def remove_rec(self, user_input):
         while True:
             Rec_fuzz_matches = self._fuzzy_match(user_input)
-            recs = self.display_rec_list(Rec_fuzz_matches, 'Remove')
+            record = self.display_rec_list(Rec_fuzz_matches, 'Remove')
 
-            if recs and user.prompt_yn('Delete {}'.format(recs.title)):
-                self.dh.db.remove(recs)
-                del self.dh.recs[recs.title]
-                Rec_fuzz_matches.remove(recs)
+            if record is not None and user.prompt_yn('Delete {}'.format(record.title)):
+                context = QContext(record, '','', Flags.DELETERECORD)
+                self.q.put(context)
+                #self.ph.dh.db.remove(record)
+                del self.record_group[record.title]
+                Rec_fuzz_matches.remove(record)
             else:
                 break
 
@@ -189,10 +191,8 @@ class Config:
         self.repo_dp = os.path.dirname(os.path.realpath(__file__))
         self.datadir_fp = self.repo_dp + '/datadir'
         self.db_fp = self.datadir_fp + '/memories.db'
-        self.exclusions_fp = self.datadir_fp + '/exclusions.txt'
 
         file_sys.init_dir(self.datadir_fp)
-        file_sys.init_file(self.exclusions_fp)
 
         self.force_import = argv['--force']
         self.top_n = argv['--top']
@@ -218,7 +218,7 @@ def main(argv):
         memfog.export_recs(argv['<dirpath>'])
     elif argv['import']:
         memfog.import_recs(argv['<filepath>'])
-    elif len(memfog.dh.recs) > 0:
+    elif len(memfog.record_group) > 0:
         memfog.display_rec(user_input)
     else:
         print('No memories exist')
@@ -227,3 +227,8 @@ if __name__ == '__main__':
     cli_args = docopt(__doc__, version='memfog v1.6.2.3')
     config = Config(cli_args)
     main(cli_args)
+
+
+# TODO add command line footer option to refresh record without exiting ui
+#   if instruction was EXEC and changed it to PATH, :r would refresh so you would
+#   see the content at that path in the UI
