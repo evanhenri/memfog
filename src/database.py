@@ -19,17 +19,19 @@ class Database:
         self.session.bulk_save_objects(Recs)
         self.session.commit()
 
-    def insert(self, Rec):
-        self.session.add(Rec)
+    def insert(self, context):
+        self.session.add(context.record)
         self.session.commit()
 
-    def remove(self, Rec):
-        self.session.query(RecordMap).filter_by(row_id=Rec.row_id).delete()
+    def delete(self, context):
+        self.session.query(RecordMap).filter_by(row_id=context.record.row_id).delete()
         self.session.commit()
 
-    def update(self, rec_id, updated_fields):
-        self.session.query(RecordMap).filter_by(row_id=rec_id).update(updated_fields)
-        self.session.commit()
+    def update(self, context):
+        fields = { k:v for k,v in context.record.__dict__.items() if k in context.altered_fields }
+        if len(fields) > 0:
+            self.session.query(RecordMap).filter_by(row_id=context.record.row_id).update(fields)
+            self.session.commit()
 
 class RecordMap(Base):
     __tablename__ = 'record'
