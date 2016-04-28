@@ -2,7 +2,7 @@ import re
 import os
 import subprocess
 
-from . import file_io
+from . import file_io, util
 
 
 class TextField:
@@ -81,7 +81,7 @@ class Interpreted(Raw):
             text_field.instructions.append(tuple([key, val]))
 
             if key == 'PATH':
-                file_content = file_io.str_from_file(val)
+                file_content = file_io.str_from_file(val).expandtabs(tabsize=4)
                 text_field.text = text_field.text.replace(match.group(0), file_content)
 
             elif key == 'EXEC':
