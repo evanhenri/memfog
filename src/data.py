@@ -15,6 +15,9 @@ class TextField:
     def is_altered(self):
         return self.starting_state != hash(self.text)
 
+    def is_interpreted(self):
+        return len(self.instructions) > 0
+
 
 class Title(TextField):
     def __init__(self, text):
@@ -108,19 +111,23 @@ class Data:
                 if instruction_key == 'PATH':
                     file_io.str_to_file(instruction_val, field_obj.text)
 
-    # FIXME below method assumes that any changes made the to the record will occur to the RAW data
-    # if the record is being interpretted and changes are made to an uninterpretted field, those changes are not being saved
-    # Ex: Body is interpretted but keywords and title are not. Keywords and/or title changes are not being detected as
-    #       altered and not updated in the database
     def update_record_context(self, context):
         """
         Determine which fields have been altered and add their field name to the context.
         Only fields that have been changed need to be updated in the database.
         Update context.record to mirror text from data fields.
         """
+        # If a field in the interpretted data is altered but is not being interpreted, assign it's text value
+        # to the corresponding raw data field
+        for field_name, field_obj in self.interpreted.__dict__.items():
+            if not field_obj.is_interpreted() and field_obj.is_altered():
+                self.raw.__dict__[field_name].text = field_obj.text
+
+        # Any manual changes are now being reflected in the raw data fields. If a raw data field is detected as
+        # being altered, add it to altered fields list and update context.record to contain the altered value
         for field_name, field_obj in self.raw.__dict__.items():
             if field_obj.is_altered():
                 context.altered_fields.add(field_name)
+                context.record.__dict__[field_name] = field_obj.text
 
-        context.record.__dict__.update(self.raw.dump())
         return context
