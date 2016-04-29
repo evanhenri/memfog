@@ -2,7 +2,7 @@ import re
 import os
 import subprocess
 
-from . import file_io, util
+from . import file_io
 
 
 class TextField:
@@ -43,11 +43,11 @@ class Raw:
         self.body = Body(record.body)
 
     def dump(self):
-        return { field_name:field_obj.text for field_name,field_obj in self.__dict__.items() }
+        return { field_name:field_obj.text for field_name,field_obj in vars(self).items() }
 
     def update_fields(self, args):
         for attr_id, attr_val in args.items():
-            self.__dict__[attr_id].text = attr_val
+            vars(self)[attr_id].text = attr_val
 
 
 class Interpreted(Raw):
@@ -106,7 +106,7 @@ class Data:
 
     def update_interpreted_sources(self):
         """ Write changes made to interpreted PATH text to their source file """
-        for field_name, field_obj in self.interpreted.__dict__.items():
+        for field_name, field_obj in vars(self.interpreted).items():
             for instruction_key, instruction_val in field_obj.instructions:
                 if instruction_key == 'PATH':
                     file_io.str_to_file(instruction_val, field_obj.text)
@@ -119,15 +119,15 @@ class Data:
         """
         # If a field in the interpretted data is altered but is not being interpreted, assign it's text value
         # to the corresponding raw data field
-        for field_name, field_obj in self.interpreted.__dict__.items():
+        for field_name, field_obj in vars(self.interpreted).items():
             if not field_obj.is_interpreted() and field_obj.is_altered():
-                self.raw.__dict__[field_name].text = field_obj.text
+                vars(self.raw)[field_name].text = field_obj.text
 
         # Any manual changes are now being reflected in the raw data fields. If a raw data field is detected as
         # being altered, add it to altered fields list and update context.record to contain the altered value
         for field_name, field_obj in self.raw.__dict__.items():
             if field_obj.is_altered():
                 context.altered_fields.add(field_name)
-                context.record.__dict__[field_name] = field_obj.text
+                setattr(context.record, field_name, field_obj.text)
 
         return context

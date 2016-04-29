@@ -10,7 +10,7 @@ class Record(database.RecordMap):
         return self.search_score > other_record.search_score
 
     def __repr__(self):
-        return 'Memory {}: {}'.format(self.__dict__.items())
+        return 'Record {}: {}'.format(vars(self).items())
 
     def dump(self):
         return { 'title':self.title,'keywords':self.keywords,'body':self.body }
@@ -22,16 +22,16 @@ class Record(database.RecordMap):
 
 class RecordGroup:
     def __init__(self, db_stream):
-        self._records = { record.title:record for record in db_stream }
+        self.records = { record.title:record for record in db_stream }
 
     def __len__(self):
-        return len(self._records)
+        return len(self.records)
 
     def __iter__(self):
-        return iter(self._records.values())
+        return iter(self.records.values())
 
     def __contains__(self, item):
-        return item in self._records
+        return item in self.records
 
     def __delitem__(self, key):
-        del self._records[key]
+        del self.records[key]
