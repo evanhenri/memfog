@@ -15,8 +15,8 @@ class Database:
         DBSession = sessionmaker(bind=engine)
         self.session = DBSession()
 
-    def bulk_insert(self, Recs=[]):
-        self.session.bulk_save_objects(Recs)
+    def bulk_insert(self, context):
+        self.session.bulk_save_objects(context.record)
         self.session.commit()
 
     def insert(self, context):
@@ -28,7 +28,7 @@ class Database:
         self.session.commit()
 
     def update(self, context):
-        fields = { k:v for k,v in context.record.__dict__.items() if k in context.altered_fields }
+        fields = { k:v for k,v in vars(context.record).items() if k in context.altered_fields }
         if len(fields) > 0:
             self.session.query(RecordMap).filter_by(row_id=context.record.row_id).update(fields)
             self.session.commit()
