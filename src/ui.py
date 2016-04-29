@@ -10,9 +10,17 @@ from . import file_io
 from . import file_sys
 from .data import Data
 
-class ModeLabel(urwid.Text):
+class InteractionLabel(urwid.Text):
     def __init__(self):
-        super(ModeLabel, self).__init__(
+        super(InteractionLabel, self).__init__(
+            markup='',
+            align='left'
+        )
+
+
+class ViewLabel(urwid.Text):
+    def __init__(self):
+        super(ViewLabel, self).__init__(
             markup='',
             align='left'
         )
@@ -32,12 +40,14 @@ class Header(urwid.Columns):
         palette_id = 'HEADER_BASE'
         super(Header, self).__init__(
             widget_list=[
-                (urwid.AttrMap(ModeLabel(), palette_id)),
+                (urwid.AttrMap(InteractionLabel(), palette_id)),
+                (urwid.AttrMap(ViewLabel(), palette_id)),
                 (urwid.AttrMap(Title(), palette_id))
             ])
 
         self._attributes = {
-            'label': self.widget_list[0].base_widget,
+            'interaction_label': self.widget_list[0].base_widget,
+            'view_label': self.widget_list[1].base_widget,
             'title': self.widget_list[-1].base_widget
         }
     def __getitem__(self, item):
@@ -62,11 +72,14 @@ class Body(urwid.Edit):
             multiline=True,
             allow_tab=True
         )
+        
         self._attributes = {
             'text': self.edit_text
         }
+
     def __getitem__(self, item):
         return self._attributes[item]
+
     def __setitem__(self, key, value):
         self._attributes[key] = value
 
@@ -77,6 +90,7 @@ class CommandFooter(urwid.Edit):
             caption='> ',
             edit_text=''
         )
+
         self.palette_id = 'COMMAND_FOOTER_BASE'
         self.cmd_pattern = re.compile('(:.\S*)')
         self.clear_before_keypress = False
@@ -162,12 +176,13 @@ class Content(urwid.ListBox):
         return self._attributes[item]
 
     def keyword_widget_handler(self):
-        interaction_mode = self['header']['label'].text
+        interaction_mode = self['header']['interaction_label'].text
         switch = { 'INSERT':self.show_keywords, 'COMMAND':self.hide_keywords }
         switch[interaction_mode]()
 
     def show_keywords(self):
         self.base_widget.body.insert(1, self.keyword_widget)
+
     def hide_keywords(self):
         if len(self.base_widget.body) == 4:
             self.keyword_widget = self.base_widget.body.pop(1)
@@ -226,8 +241,10 @@ class WidgetController(urwid.Frame):
 
     def set_widget_text(self, data={}):
         if 'interaction_mode' in data:
-            self['header']['label'].set_text(data['interaction_mode'])
+            self['header']['interaction_label'].set_text(data['interaction_mode'])
             self.footer.set_mode(data['interaction_mode'])
+        if 'view_mode' in data:
+            self['header']['view_label'].set_text(data['view_mode'])
         if 'title' in data:
             self['header']['title'].set_edit_text(data['title'])
         if 'keywords' in data:
@@ -247,7 +264,7 @@ class DataController:
 
     def get_view(self, view_mode):
         switch = { 'RAW':self.data.raw.dump, 'INTERPRETED':self.data.interpreted.dump }
-        return { **switch[view_mode](), **{'interaction_mode':self.interaction_mode} }
+        return { **switch[view_mode](), **{'interaction_mode':self.interaction_mode, 'view_mode':self.view_mode} }
 
     def save_view(self, view_data):
         """
