@@ -16,6 +16,7 @@ Options:
 import pkg_resources
 from docopt import docopt
 import sys
+import os
 
 from . import memfog as mf
 from . import file_sys
@@ -24,10 +25,11 @@ from . import util
 
 class Config:
     def __init__(self, argv):
-        self.datadir_fp = 'datadir'
-        self.db_fp = self.datadir_fp + '/records.db'
+        self.home_dp = os.path.expanduser('~')
+        self.project_file_dp = self.home_dp + '/memfog'
+        self.db_fp = self.project_file_dp + '/records.db'
 
-        file_sys.init_dir(self.datadir_fp)
+        file_sys.init_dir(self.project_file_dp)
 
         self.force_import = argv['--force']
         self.top_n = argv['--top']
