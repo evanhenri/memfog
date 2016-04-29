@@ -2,16 +2,6 @@ import string
 import shlex
 import itertools
 
-def k_intersect_v_diff(dict_a, dict_b):
-    """
-    :returns set containing keys found in both dicts if the value for that key is diffent between dicts
-    """
-    updated_keys = set()
-    for k in dict_a.keys():
-        if k in dict_b and dict_a[k] != dict_b[k]:
-            updated_keys.add(k)
-    return updated_keys
-
 def is_valid_input(s):
     return len(s) > 0 and s.isdigit() and int(s) >= 0
 

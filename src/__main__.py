@@ -13,6 +13,7 @@ Options:
   -v --version  Show version
 
 """
+import pkg_resources
 from docopt import docopt
 from fuzzywuzzy import fuzz
 import multiprocessing
@@ -219,6 +220,6 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    args = docopt(__doc__, version='memfog v1.6.3')
+    args = docopt(__doc__, version=pkg_resources.require('memfog')[0].version)
     config = Config(args)
     main(args)
