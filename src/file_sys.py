@@ -1,105 +1,41 @@
-import os
-from collections import deque
-from itertools import chain
+from pathlib import Path
 
 
-def file_exists(fp):
-    """
-    :type fp: str
-    Used to produce error notification if file_path is invalid
-    """
-    if os.path.isfile(fp):
-        return True
-    print('Invalid file path {}'.format(fp))
-    return False
+def get_path(*args):
+    result = []
+
+    for p in args:
+        if not isinstance(p, Path):
+            result.append(Path(p))
+        else:
+            result.append(p)
+    return result
 
 def init_dir(dp):
     """
-    :type dp: str
-
+    :type dp: pathlib.Path or str
     """
+    dp = get_path(dp)[0]
+
     try:
-        if not os.path.isdir(dp):
-            os.mkdir(dp)
+        if not dp.is_dir():
+            dp.mkdir()
     except Exception as e:
-        print('Error occured while creating directory at {}\n{}'.format(dp, e.args))
+        print('Error occured while creating directory at {}\n{}'.format(str(dp), e.args))
 
-def init_file(fp):
+def fix_path(p, default_dp, default_fn):
     """
-    :type fp: str
-    """
-    try:
-        if not os.path.isfile(fp):
-            open(fp, 'w').close()
-    except Exception as e:
-        print('Error occured while making file {}\n{}'.format(fp, e.args))
-
-def check_path(mode='r', *input_paths):
-    """
-    :type input_paths: list of strings
-    :type mode: char
-    Returns True/False depending on if using mode on input_path is valid
-    """
-    expanded_elements = map(os.path.expanduser, chain(input_paths))
-    merged_elements = '/'.join(expanded_elements)
-    split_elements = merged_elements.split('/')
-    path_elements = deque(split_elements)
-    partial_path = ''
-
-    # iteratively reconstruct path until first instance when invalid path is found
-    while len(path_elements) > 0:
-        element = path_elements.popleft()
-        tmp_path = partial_path + '/' + element
-        if len(element) > 0:
-            if os.path.isdir(tmp_path) or os.path.isfile(tmp_path):
-                partial_path += '/' + element
-            else:
-                path_elements.appendleft(element)
-                break
-
-    if mode.startswith('r'):
-        if os.path.isfile(partial_path) and os.access(partial_path, os.R_OK):
-            return True
-        return False
-
-    if mode.startswith('w'):
-        if os.access(partial_path, os.W_OK):
-            # One item will exist in the deque if it is the file / dir name that is pending creation
-            # If partial path already exists as a file, then it is possible to overwrite it
-            if len(path_elements) == 1 or os.path.isfile(partial_path):
-                return True
-        return False
-
-    if mode.startswith('a'):
-        if os.path.isfile(partial_path) and os.access(partial_path, os.W_OK):
-            return True
-        return False
-
-    if mode.startswith('x'):
-        if os.path.isfile(partial_path) and os.access(partial_path, os.X_OK):
-            return True
-        return False
-
-def fix_path(fp, default_dp, default_fn):
-    """
-    :param fp: file path
+    :param p: file path as str input from user
     :param default_dp: default directory path
     :param default_fn: default file name
     """
-    if len(fp) > 0:
-        if fp[-1] == '/':
-            fp = fp.rsplit('/', 1)[0]
+    p, default_dp, default_fn = get_path(p, default_dp, default_fn)
+    p = p.expanduser()
 
-        if default_dp[-1] == '/':
-            default_dp = default_dp.rsplit('/', 1)[0]
-
-        dp, *fp = fp.rsplit('/', 1)
-
-        if os.path.isdir(dp):
-            if len(fp) > 0:
-                return dp + '/' + ''.join(fp)
-            return dp + '/' + default_fn
-        # if only a filename was provided but no path in which to place it
-        elif '/' not in dp:
-            return default_dp + '/' + dp
-    return default_dp + '/' + default_fn
+    if p.parent.is_dir() and not p.exists():
+        return p
+    elif p.is_dir():
+        return p / default_fn
+    elif len(p.parts) == 1:
+        return default_dp / p
+    return default_dp / default_fn

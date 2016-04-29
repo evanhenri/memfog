@@ -1,9 +1,9 @@
 from fuzzywuzzy import fuzz
 import multiprocessing
 import datetime
-import os
+from pathlib import Path
 
-from . import file_io, file_sys, ui, user, util
+from . import file_io, ui, user, util
 from .record import Record, RecordGroup
 from .database import Database
 from .proxy import Flags
@@ -92,31 +92,25 @@ class Memfog:
         else:
             print('No records exist')
 
-    def export_recs(self, export_path):
+    def export_recs(self, target_path):
         date = datetime.datetime.now()
-        default_filename = 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
-        target_path = os.getcwd() + '/' + default_filename
+        default_fn = 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
 
-        if export_path is None:
-            export_path = target_path
-
-        # check if path to file pending export has been included in export_path
-        if file_sys.check_path('w', export_path):
-            target_path = export_path
-        # check if path to directory to export into has been included in export_path
+        if target_path is None:
+            target_path = config.project_dp / default_fn
         else:
-            if not export_path.endswith('/'):
-                export_path += '/'
-            if file_sys.check_path('w', export_path, default_filename):
-                target_path = export_path + default_filename
+            target_path = Path(target_path).expanduser()
 
-        if os.path.exists(target_path):
+        if target_path.is_dir():
+            target_path = target_path / default_fn
+
+        if target_path.exists():
             if not user.prompt_yn('Overwrite existing file {}'.format(target_path)):
                 return
 
         rec_backups = [ Rec.dump() for Rec in self.record_group ]
         file_io.json_to_file(target_path, rec_backups)
-        print('Exported to ' + target_path)
+        print('Exported to ' + str(target_path))
 
     def fuzzy_match(self, user_input):
         user_keywords = ''.join(util.unique_everseen(util.standardize(user_input)))

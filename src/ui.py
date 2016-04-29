@@ -1,14 +1,14 @@
 import urwid.curses_display
 import urwid
 import signal
-import os
 import re
-
 
 from . import util
 from . import file_io
 from . import file_sys
 from .data import Data
+from . import memfog
+
 
 class InteractionLabel(urwid.Text):
     def __init__(self):
@@ -50,6 +50,7 @@ class Header(urwid.Columns):
             'view_label': self.widget_list[1].base_widget,
             'title': self.widget_list[-1].base_widget
         }
+
     def __getitem__(self, item):
         return self._attributes[item]
 
@@ -329,14 +330,10 @@ class UI:
         self.safe_exit()
 
     def export(self, fp, content):
-        default_dp = os.getcwd()
+        default_dp = memfog.config.project_dp
         default_fn = (content['title']).replace(' ', '_')
         fp = file_sys.fix_path(fp, default_dp, default_fn)
-
-        if not file_sys.check_path('w', fp):
-            return 'Unable to export to \'{}\''.format(fp)
-        file_io.json_to_file(fp, self.WigetC.dump())
-        return 'Exported to \'{}\''.format(fp)
+        return file_io.json_to_file(fp, self.WigetC.dump())
 
     def evaluate_command(self, cmd_text):
         if len(cmd_text) > 0:
