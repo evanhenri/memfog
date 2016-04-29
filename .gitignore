@@ -1,6 +1,9 @@
 .idea/
-datadir/
 test.py
 *.json
 *.pyc
 todo
+
+build/
+dist/
+memfog.egg-info/
