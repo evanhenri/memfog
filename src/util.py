@@ -1,10 +1,9 @@
 import string
 import shlex
+import itertools
 
 def k_intersect_v_diff(dict_a, dict_b):
     """
-    :type dict_a: dict
-    :type dict_b: dict
     :returns set containing keys found in both dicts if the value for that key is diffent between dicts
     """
     updated_keys = set()
@@ -14,27 +13,44 @@ def k_intersect_v_diff(dict_a, dict_b):
     return updated_keys
 
 def is_valid_input(s):
-    """
-    :type s: str
-    :rtype: bool
-    """
     return len(s) > 0 and s.isdigit() and int(s) >= 0
 
 def strip_punctuation(s):
     """
-    :type s: str
-    :returns: s stripped of all punctuation no found in exclusions
+    :returns: s stripped of all punctuation not found in exclusions
     """
     exclusions = ['\'','"']
     return ''.join([c for c in s if c not in string.punctuation or c in exclusions])
 
 def standardize(s):
     """
-    :type s: str
     :returns: list of non-empty words strings from s stripped of whitespace and punctuation
     """
     stripped = strip_punctuation(s).lower()
     return shlex.shlex(stripped)
+
+def unique_everseen(seq, key_func=None):
+    """
+    List unique elements, preserving order. Remember all elements ever seen.
+    unique_everseen('AAAABBBCCDAABBB') --> A B C D
+    unique_everseen('ABBCcAD', str.lower) --> A B C D
+    """
+    # tracks what items have already been encountered while iterating over seq
+    seen = set()
+    seen_add = seen.add
+    if key_func is None:
+        # for each item not currently in seen set
+        for item in itertools.filterfalse(seen.__contains__, seq):
+            # call cached function call
+            seen_add(item)
+            # return first instances of item
+            yield item
+    else:
+        for item in seq:
+            k = key_func(item)
+            if k not in seen:
+                seen_add(k)
+                yield item
 
 class UniqueNeighborScrollList(list):
     """
