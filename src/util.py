@@ -9,15 +9,19 @@ def strip_punctuation(s):
     """
     :returns: s stripped of all punctuation not found in exclusions
     """
-    exclusions = ['\'','"']
-    return ''.join([c for c in s if c not in string.punctuation or c in exclusions])
+    exclusions = ['\'','"', '=']
+    return ''.join(c for c in s if c not in string.punctuation or c in exclusions)
 
 def standardize(s):
     """
-    :returns: list of non-empty words strings from s stripped of whitespace and punctuation
+    :returns: generator for string tokens extracted from s
     """
     stripped = strip_punctuation(s).lower()
-    return shlex.shlex(stripped)
+
+    # shlex generates tokens from the provided string
+    # 'this is a, a string!' -> ['this', 'is', 'a', ',', 'string', '!']
+    for token in shlex.shlex(stripped):
+        yield token
 
 def unique_everseen(seq, key_func=None):
     """
