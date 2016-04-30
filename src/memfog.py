@@ -113,12 +113,10 @@ class Memfog:
         print('Exported to ' + str(target_path))
 
     def fuzzy_match(self, user_input):
-        user_keywords = ''.join(util.unique_everseen(util.standardize(user_input)))
-
+        user_keywords = ' '.join(util.unique_everseen(util.standardize(user_input)))
         for record in self.record_group:
             keywords = ' '.join(record.make_set())
-            record.search_score = (fuzz.token_sort_ratio(keywords, user_keywords) + fuzz.token_set_ratio(keywords, user_keywords)) / 2
-
+            record.search_score = fuzz.token_sort_ratio(keywords, user_keywords)
         return [*sorted(self.record_group)][-config.top_n::]
 
     def import_recs(self, fp):
