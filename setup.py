@@ -12,6 +12,7 @@ setup(
     install_requires=[
         'docopt >= 0.6.2',
         'fuzzywuzzy >= 0.8.1',
+        'pathlib',
         'SQLAlchemy >= 1.0.9',
         'urwid >= 1.3.1',
     ],
