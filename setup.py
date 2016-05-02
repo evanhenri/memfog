@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='memfog',
-    version='1.6.3',
+    version='1.6.4',
     author='Evan Henri',
     packages=['src',],
     license='MIT',
