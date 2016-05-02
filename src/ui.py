@@ -7,6 +7,7 @@ from . import util
 from . import file_io
 from . import file_sys
 from .data import Data
+from .proxy import Flags
 from . import memfog
 
 
@@ -44,8 +45,9 @@ class HeaderWidget(urwid.Columns):
 
         super(HeaderWidget, self).__init__(
             widget_list=[
-                (urwid.AttrMap(self.interaction, palette_id)),
-                (urwid.AttrMap(self.view, palette_id)),
+                ('pack',urwid.AttrMap(self.interaction, palette_id)),
+                ('pack', urwid.AttrMap(urwid.Text(' / '), palette_id)),
+                ('pack',urwid.AttrMap(self.view, palette_id)),
                 (urwid.AttrMap(self.title, palette_id))
             ])
 
@@ -156,7 +158,7 @@ class InsertFooter(urwid.Columns):
         palette_id = [self.palette_id, 'INSERT_FOOTER_HIGHLIGHT']
         super(InsertFooter, self).__init__(
             widget_list=[
-                ('pack', urwid.AttrMap(urwid.Text(' ^C '), palette_id[0])),
+                ('pack', urwid.AttrMap(urwid.Text(' ^X '), palette_id[0])),
                 ('pack', urwid.AttrMap(urwid.Text('Exit'), palette_id[1])),
                 ('pack', urwid.AttrMap(urwid.Text(' ESC '), palette_id[0])),
                 ('pack', urwid.AttrMap(urwid.Text('Toggle Mode'), palette_id[1]))
@@ -176,36 +178,24 @@ class Footer(urwid.WidgetPlaceholder):
         self.original_widget = urwid.AttrMap(footer_widget, attr_map=footer_widget.palette_id)
 
 
-class ScreenAttributes:
-    def __init__(self):
-        self.palette = { 'INSERT':[ ('HEADER_BASE', 'white', 'dark magenta'),
-                                    ('INSERT_FOOTER_HIGHLIGHT', 'dark gray', 'light gray'),
-                                    ('INSERT_FOOTER_BASE', 'white', 'dark magenta') ],
-
-                         'COMMAND':[ ('HEADER_BASE', 'white', 'black'),
-                                     ('COMMAND_FOOTER_BASE', 'dark cyan', 'black') ] }
-
-
 class ScreenController(urwid.curses_display.Screen):
     def __init__(self):
         super(ScreenController, self).__init__()
-        self.attributes = ScreenAttributes()
+        self.palettes = {'INSERT': [('HEADER_BASE', 'white', 'dark magenta'),
+                                    ('INSERT_FOOTER_HIGHLIGHT', 'dark gray', 'light gray'),
+                                    ('INSERT_FOOTER_BASE', 'white', 'dark magenta')],
+                         'COMMAND': [('HEADER_BASE', 'white', 'black'),
+                                     ('COMMAND_FOOTER_BASE', 'dark cyan', 'black')]}
+
         self.scroll_actions = {'up', 'down', 'page up', 'page down', 'scroll wheel up', 'scroll wheel down'}
 
     def set_palette_mode(self, mode):
-        palette = self.attributes.palette.get(mode)
-        if palette is not None:
-            self.register_palette(palette)
+        self.register_palette(self.palettes[mode])
 
 
 class WidgetController(urwid.Frame):
     def __init__(self):
         super(WidgetController, self).__init__(body=Content(), footer=Footer())
-
-    def __getitem__(self, item):
-        if item == 'footer':
-            return self.footer.base_widget
-        return self.body[item]
 
     def dump(self):
         return {
@@ -214,18 +204,23 @@ class WidgetController(urwid.Frame):
             'body':self.body.record_body.edit_text
         }
 
-    def set_widget_text(self, data={}):
-        if 'interaction_mode' in data:
-            self.body.header.interaction.set_text(data['interaction_mode'])
-            self.footer.set_mode(data['interaction_mode'])
-        if 'view_mode' in data:
-            self.body.header.view.set_text(data['view_mode'])
-        if 'title' in data:
-            self.body.header.title.set_edit_text(data['title'])
-        if 'keywords' in data:
-            self.body.keywords.set_edit_text(data['keywords'])
-        if 'body' in data:
-            self.body.record_body.set_edit_text(data['body'])
+    def set_widget_text(self, args):
+        """
+        :type args: dict
+        :param args: { widget_name1:new_text, widget_name2:new_text, ... }
+        Assigns text to widget for key(widget name) value(text) pair in args
+        """
+        if 'interaction_mode' in args:
+            self.body.header.interaction.set_text(args['interaction_mode'])
+            self.footer.set_mode(args['interaction_mode'])
+        if 'view_mode' in args:
+            self.body.header.view.set_text(args['view_mode'])
+        if 'title' in args:
+            self.body.header.title.set_edit_text(args['title'])
+        if 'keywords' in args:
+            self.body.keywords.set_edit_text(args['keywords'])
+        if 'body' in args:
+            self.body.record_body.set_edit_text(args['body'])
 
 
 class DataController:
@@ -291,6 +286,7 @@ class UI:
         return self.DataC.data.update_record_context(self.context)
 
     def save(self):
+        """ Update database entry for current record using most recent record data """
         context = self.update_context()
         self.msg_queue.put(context)
 
@@ -301,12 +297,18 @@ class UI:
         # Race condition occurs when adding new records if not present
         self.msg_queue.join()
 
+        # FIXME bug where if save occurs when adding a new record, the record gets added on save and a duplicate 2nd record gets added on close
+        #   should change the flag to update so the first added record gets updated
+        # if context.flag == Flags.INSERTRECORD:
+        #     context.flag == Flags.UPDATERECORD
+
     def ctrl_c_callback(self, sig, frame):
         self.exit_flag = True
 
-    def export(self, fp, content):
+    def export(self, fp, payload):
+        """ Creates json file at filepath fp containing data for currently displayed record """
         default_dp = memfog.config.project_dp
-        default_fn = (content['title']).replace(' ', '_')
+        default_fn = (payload['title']).replace(' ', '_')
         fp = file_sys.fix_path(fp, default_dp, default_fn)
         return file_io.json_to_file(fp, self.WigetC.dump())
 
@@ -328,7 +330,7 @@ class UI:
                     self.WigetC.footer.base_widget.set_edit_text(result)
 
                 elif cmd == ':h' or cmd == ':help':
-                    self.WigetC.footer.base_widget.set_edit_text('[:e]xport <path>, [:i]nsert, [:q]uit, [:v]iew <mode>')
+                    self.WigetC.footer.base_widget.set_edit_text(':export <path>, :insert, :quit, :refresh, :save, :view <mode>')
 
                 elif cmd == ':i' or cmd == ':insert':
                     self.WigetC.footer.base_widget.set_edit_text('')
