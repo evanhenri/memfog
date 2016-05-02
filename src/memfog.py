@@ -42,10 +42,10 @@ class ProcessHandler(multiprocessing.Process):
 
 class QContext:
     """ Message passed between producer (UI) and consumer (ProcessHandler) using queue """
-    def __init__(self, record, interaction_mode, view_mode, flag):
+    def __init__(self, record, flag, i_mode='', v_mode=''):
         self.record = record
-        self.interaction_mode = interaction_mode
-        self.view_mode = view_mode
+        self.interaction_mode = i_mode
+        self.view_mode = v_mode
         self.flag = flag
         self.altered_fields = set()
 
@@ -58,7 +58,7 @@ class Memfog:
         ph.start()
 
     def create_rec(self):
-        context = QContext(Record(), 'INSERT', 'RAW', Flags.INSERTRECORD)
+        context = QContext(Record(), Flags.INSERTRECORD, i_mode='INSERT', v_mode='RAW')
         ui.UI(context, self.q)
 
     def display_rec(self, user_keywords):
@@ -70,7 +70,7 @@ class Memfog:
                 break
 
             if record is not None:
-                context = QContext(record, 'COMMAND', 'INTERPRETED', Flags.UPDATERECORD)
+                context = QContext(record, Flags.UPDATERECORD, i_mode='COMMAND', v_mode='INTERPRETED')
                 ui.UI(context, self.q)
             else:
                 break
@@ -132,7 +132,7 @@ class Memfog:
                 print('Skipping duplicate - {}'.format(kwargs['title']))
 
         if len(new_records) > 0:
-            context = QContext(new_records, '', '', Flags.BULKINSERTRECORD)
+            context = QContext(new_records, flag=Flags.BULKINSERTRECORD)
             self.q.put(context)
             self.q.join()
 
@@ -147,7 +147,7 @@ class Memfog:
             record = self.display_rec_list(Rec_fuzz_matches, 'Remove')
 
             if record is not None and user.prompt_yn('Delete {}'.format(record.title)):
-                context = QContext(record, '','', Flags.DELETERECORD)
+                context = QContext(record, flag=Flags.DELETERECORD)
                 self.q.put(context)
                 self.q.join()
                 del self.record_group[record.title]

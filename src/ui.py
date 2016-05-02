@@ -334,8 +334,8 @@ class UI:
                     self.set_interaction_mode('INSERT')
 
                 elif cmd == ':q' or cmd == ':quit':
-                    self.exit_flag = True
                     self.save()
+                    self.exit_flag = True
 
                 elif cmd == ':s' or cmd == ':save':
                     self.save()
