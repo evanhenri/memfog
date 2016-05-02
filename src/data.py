@@ -1,5 +1,6 @@
 import re
 import os
+import copy
 import subprocess
 
 from . import file_io
@@ -45,7 +46,7 @@ class Raw:
     def dump(self):
         return { field_name:field_obj.text for field_name,field_obj in vars(self).items() }
 
-    def update_fields(self, args):
+    def update_text(self, args):
         for attr_id, attr_val in args.items():
             vars(self)[attr_id].text = attr_val
 
@@ -57,11 +58,11 @@ class Interpreted(Raw):
     """
     def __init__(self, record):
         super(Interpreted, self).__init__(record)
-        self.title = self.interpret(self.title)
-        self.keywords = self.interpret(self.keywords)
-        self.body = self.interpret(self.body)
+        self.title = self.interpret_field(self.title)
+        self.keywords = self.interpret_field(self.keywords)
+        self.body = self.interpret_field(self.body)
 
-    def interpret(self, text_field):
+    def interpret_field(self, field):
         """
         Parse text_field text, extract embedded instructions, and replace the instruction with the text
         interpretted from it.
@@ -75,33 +76,47 @@ class Interpreted(Raw):
             (?:\))          # Macth \)
         """, re.VERBOSE)
 
-        for match in pattern.finditer(text_field.text):
+        for match in pattern.finditer(field.text):
             key, val = match.groups()
             val = ' '.join(map(os.path.expanduser, val.split()))
-            text_field.instructions.append(tuple([key, val]))
+            field.instructions.append(tuple([key, val]))
 
             if key == 'PATH':
                 file_content = file_io.str_from_file(val).expandtabs(tabsize=4)
-                text_field.text = text_field.text.replace(match.group(0), file_content)
+                field.text = field.text.replace(match.group(0), file_content)
 
             elif key == 'EXEC':
                 proc = subprocess.Popen(val, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
                 std_out, std_err = proc.communicate(timeout=5)
                 proc.wait(timeout=5)
                 proc_result = std_out.decode() + std_err.decode()
-                text_field.text = text_field.text.replace(match.group(0), proc_result)
+                field.text = field.text.replace(match.group(0), proc_result)
 
         # Even though all instructions are correctly interpretted, some of the embedded instructions still exist in
         # the text for the field in which the instruction exists in addition to the content interpreted from them.
         # Substitute any remaining instructions with empty string temporarily so they don't appear in UI
-        text_field.text = re.sub(pattern, '', text_field.text)
-        return text_field
+        field.text = re.sub(pattern, '', field.text)
+        return field
+
+    def refresh_from_sources(self, raw_data):
+        """ Reintpret raw field text and and set to interpreted field to reflect any changes in linked sources """
+        self.title = self.interpret_field(raw_data.title)
+        self.keywords = self.interpret_field(raw_data.keywords)
+        self.body = self.interpret_field(raw_data.body)
 
 
 class Data:
     def __init__(self, record):
         self.raw = Raw(record)
         self.interpreted = Interpreted(record)
+        self.is_interpreted = self.raw.dump() != self.interpreted.dump()
+
+    def refresh_interpretation(self):
+        """
+        Update interpreted field to use values from re-interpretation of current raw field text.
+        Deepcopy of raw fields required to stop to stop them from being changed to interpreted text.
+        """
+        self.interpreted.refresh_from_sources(copy.deepcopy(self.raw))
         self.is_interpreted = self.raw.dump() != self.interpreted.dump()
 
     def update_interpreted_sources(self):

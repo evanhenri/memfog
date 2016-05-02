@@ -26,23 +26,23 @@ class ViewLabel(urwid.Text):
         )
 
 
-class Title(urwid.Edit):
+class TitleWidget(urwid.Edit):
     def __init__(self):
-        super(Title, self).__init__(
+        super(TitleWidget, self).__init__(
             edit_text='',
             align='right'
         )
 
 
-class Header(urwid.Columns):
+class HeaderWidget(urwid.Columns):
     """ Container to hold ModeLabel and Title widgets """
     def __init__(self):
         palette_id = 'HEADER_BASE'
         self.interaction = InteractionLabel()
         self.view = ViewLabel()
-        self.title = Title()
+        self.title = TitleWidget()
 
-        super(Header, self).__init__(
+        super(HeaderWidget, self).__init__(
             widget_list=[
                 (urwid.AttrMap(self.interaction, palette_id)),
                 (urwid.AttrMap(self.view, palette_id)),
@@ -50,9 +50,9 @@ class Header(urwid.Columns):
             ])
 
 
-class Keywords(urwid.Edit):
+class KeywordsWidget(urwid.Edit):
     def __init__(self):
-        super(Keywords, self).__init__(
+        super(KeywordsWidget, self).__init__(
             caption='Keywords: ',
             edit_text='',
             align='left',
@@ -60,9 +60,9 @@ class Keywords(urwid.Edit):
         )
 
 
-class Body(urwid.Edit):
+class BodyWidget(urwid.Edit):
     def __init__(self):
-        super(Body, self).__init__(
+        super(BodyWidget, self).__init__(
             edit_text='',
             align='left',
             multiline=True,
@@ -73,9 +73,9 @@ class Body(urwid.Edit):
 class Content(urwid.ListBox):
     """ Container to hold header, keywords, and body widgets """
     def __init__(self):
-        self.header = Header()
-        self.keywords = Keywords()
-        self.record_body = Body()
+        self.header = HeaderWidget()
+        self.keywords = KeywordsWidget()
+        self.record_body = BodyWidget()
 
         super(Content, self).__init__(
             body=urwid.SimpleFocusListWalker([
@@ -247,12 +247,12 @@ class DataController:
         If record data is not being interpreted, makes sure data from other views is kept in sync
         """
         if self.view_mode == 'RAW':
-            self.data.raw.update_fields(view_data)
+            self.data.raw.update_text(view_data)
             if not self.data.is_interpreted:
                 self.data.interpreted = self.data.raw
 
         elif self.view_mode == 'INTERPRETED':
-            self.data.interpreted.update_fields(view_data)
+            self.data.interpreted.update_text(view_data)
             if not self.data.is_interpreted:
                 self.data.raw = self.data.interpreted
 
@@ -341,6 +341,11 @@ class UI:
                 elif cmd == ':s' or cmd == ':save':
                     self.save()
                     self.WigetC.footer.base_widget.set_edit_text('Record Saved')
+
+                elif cmd == ':r' or cmd == ':refresh':
+                    self.DataC.save_view(self.WigetC.dump())
+                    self.DataC.data.refresh_interpretation()
+                    self.WigetC.set_widget_text(self.DataC.get_view(self.DataC.view_mode))
 
                 elif cmd == ':v' or cmd == ':view':
                     try:
