@@ -286,8 +286,7 @@ class UI:
         self.DataC.view_mode = mode_id
         self.WigetC.set_widget_text(self.DataC.get_view(mode_id))
 
-    def safe_exit(self):
-        self.exit_flag = True
+    def save(self):
         self.DataC.save_view(self.WigetC.dump())
 
         if self.DataC.data.is_interpreted:
@@ -301,7 +300,8 @@ class UI:
         self.msg_queue.join()
 
     def ctrl_c_callback(self, sig, frame):
-        self.safe_exit()
+        self.exit_flag = True
+        self.save()
 
     def export(self, fp, content):
         default_dp = memfog.config.project_dp
@@ -334,7 +334,12 @@ class UI:
                     self.set_interaction_mode('INSERT')
 
                 elif cmd == ':q' or cmd == ':quit':
-                    self.safe_exit()
+                    self.exit_flag = True
+                    self.save()
+
+                elif cmd == ':s' or cmd == ':save':
+                    self.save()
+                    self.WigetC.footer.base_widget.set_edit_text('Record Saved')
 
                 elif cmd == ':v' or cmd == ':view':
                     try:
@@ -363,7 +368,8 @@ class UI:
                     size = self.ScreenC.get_cols_rows()
 
                 elif k == 'ctrl c':
-                    self.safe_exit()
+                    self.exit_flag = True
+                    self.save()
 
                 elif k in self.ScreenC.scroll_actions and self.WigetC.focus_position == 'body':
                     self.WigetC.keypress(size, k)
