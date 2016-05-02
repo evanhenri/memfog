@@ -286,14 +286,16 @@ class UI:
         self.DataC.view_mode = mode_id
         self.WigetC.set_widget_text(self.DataC.get_view(mode_id))
 
-    def save(self):
+    def update_context(self):
         self.DataC.save_view(self.WigetC.dump())
+        return self.DataC.data.update_record_context(self.context)
+
+    def save(self):
+        context = self.update_context()
+        self.msg_queue.put(context)
 
         if self.DataC.data.is_interpreted:
             self.DataC.data.update_interpreted_sources()
-
-        context = self.DataC.data.update_record_context(self.context)
-        self.msg_queue.put(context)
 
         # Block until context put into queue is fully processed.
         # Race condition occurs when adding new records if not present
@@ -301,7 +303,6 @@ class UI:
 
     def ctrl_c_callback(self, sig, frame):
         self.exit_flag = True
-        self.save()
 
     def export(self, fp, content):
         default_dp = memfog.config.project_dp
@@ -351,6 +352,29 @@ class UI:
             else:
                 self.WigetC.footer.base_widget.set_edit_text('Invalid command')
 
+    def evaluate_keypress(self, k):
+        if k == 'ctrl l':
+            self.WigetC.footer.base_widget.clear_text()
+        elif k == 'enter':
+            cmd_text = self.WigetC.footer.base_widget.get_edit_text()
+            self.WigetC.footer.base_widget.clear_text()
+            self.evaluate_command(cmd_text)
+            # if error results from entered command, clear error message before next keystroke appears
+            self.WigetC.footer.base_widget.clear_before_keypress = True
+        elif k == 'shift up':
+            self.WigetC.footer.base_widget.scroll_history_up()
+        elif k == 'shift down':
+            self.WigetC.footer.base_widget.scroll_history_down()
+        elif k == 'left':
+            self.WigetC.footer.base_widget.cursor_left()
+        elif k == 'right':
+            self.WigetC.footer.base_widget.cursor_right()
+        elif k == 'home':
+            self.WigetC.footer.base_widget.cursor_home()
+        elif k == 'end':
+            self.WigetC.footer.base_widget.cursor_end()
+        else:
+            self.WigetC.footer.base_widget.keypress((1,), k)
 
     def run(self):
         size = self.ScreenC.get_cols_rows()
@@ -367,7 +391,7 @@ class UI:
                 if k == 'window resize':
                     size = self.ScreenC.get_cols_rows()
 
-                elif k == 'ctrl c':
+                elif k == 'ctrl x':
                     self.exit_flag = True
                     self.save()
 
@@ -381,25 +405,4 @@ class UI:
                         self.WigetC.keypress(size, k)
 
                 elif self.DataC.interaction_mode == 'COMMAND':
-                    if k == 'ctrl l':
-                        self.WigetC.footer.base_widget.clear_text()
-                    elif k == 'enter':
-                        cmd_text = self.WigetC.footer.base_widget.get_edit_text()
-                        self.WigetC.footer.base_widget.clear_text()
-                        self.evaluate_command(cmd_text)
-                        # if error results from entered command, clear error message before next keystroke appears
-                        self.WigetC.footer.base_widget.clear_before_keypress = True
-                    elif k == 'shift up':
-                        self.WigetC.footer.base_widget.scroll_history_up()
-                    elif k == 'shift down':
-                        self.WigetC.footer.base_widget.scroll_history_down()
-                    elif k == 'left':
-                        self.WigetC.footer.base_widget.cursor_left()
-                    elif k == 'right':
-                        self.WigetC.footer.base_widget.cursor_right()
-                    elif k == 'home':
-                        self.WigetC.footer.base_widget.cursor_home()
-                    elif k == 'end':
-                        self.WigetC.footer.base_widget.cursor_end()
-                    else:
-                        self.WigetC.footer.base_widget.keypress((1,), k)
+                    self.evaluate_keypress(k)
