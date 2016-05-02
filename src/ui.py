@@ -285,9 +285,9 @@ class UI:
         self.DataC.save_view(self.WigetC.dump())
         return self.DataC.data.update_record_context(self.context)
 
-    def save(self):
+    def save(self, context):
         """ Update database entry for current record using most recent record data """
-        context = self.update_context()
+        # context = self.update_context()
         self.msg_queue.put(context)
 
         if self.DataC.data.is_interpreted:
@@ -337,11 +337,11 @@ class UI:
                     self.set_interaction_mode('INSERT')
 
                 elif cmd == ':q' or cmd == ':quit':
-                    self.save()
                     self.exit_flag = True
 
                 elif cmd == ':s' or cmd == ':save':
-                    self.save()
+                    context = self.update_context()
+                    self.save(context)
                     self.WigetC.footer.base_widget.set_edit_text('Record Saved')
 
                 elif cmd == ':r' or cmd == ':refresh':
@@ -383,12 +383,15 @@ class UI:
         else:
             self.WigetC.footer.base_widget.keypress((1,), k)
 
+    def refresh_screen(self, size):
+        canvas = self.WigetC.render(size, focus=True)
+        self.ScreenC.draw_screen(size, canvas)
+
     def run(self):
         size = self.ScreenC.get_cols_rows()
 
         while not self.exit_flag:
-            canvas = self.WigetC.render(size, focus=True)
-            self.ScreenC.draw_screen(size, canvas)
+            self.refresh_screen(size)
             keys = None
 
             while not keys:
@@ -400,7 +403,6 @@ class UI:
 
                 elif k == 'ctrl x':
                     self.exit_flag = True
-                    self.save()
 
                 elif k in self.ScreenC.scroll_actions and self.WigetC.focus_position == 'body':
                     self.WigetC.keypress(size, k)
@@ -413,3 +415,15 @@ class UI:
 
                 elif self.DataC.interaction_mode == 'COMMAND':
                     self.evaluate_keypress(k)
+
+        context = self.update_context()
+
+        if len(context.altered_fields) > 0:
+            self.WigetC.footer.base_widget.set_edit_text('Save change? y/n')
+            self.refresh_screen(size)
+            k = self.ScreenC.get_input()
+            if k[0].lower() == 'y':
+                self.save(context)
+            else:
+                del context
+
