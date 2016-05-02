@@ -25,7 +25,10 @@ class ProcessHandler(multiprocessing.Process):
 
     def run(self):
         while True:
-            context = self.q.get()
+            try:
+                context = self.q.get()
+            except KeyboardInterrupt:
+                break
 
             switch = {
                 Flags.INSERTRECORD : self.db.insert,
@@ -62,18 +65,12 @@ class Memfog:
         ui.UI(context, self.q)
 
     def display_rec(self, user_keywords):
-        while True:
-            try:
-                Rec_fuzz_matches = self.fuzzy_match(user_keywords)
-                record = self.display_rec_list(Rec_fuzz_matches, 'Display')
-            except KeyboardInterrupt:
-                break
+        Rec_fuzz_matches = self.fuzzy_match(user_keywords)
+        record = self.display_rec_list(Rec_fuzz_matches, 'Display')
 
-            if record is not None:
-                context = QContext(record, Flags.UPDATERECORD, i_mode='COMMAND', v_mode='INTERPRETED')
-                ui.UI(context, self.q)
-            else:
-                break
+        if record is not None:
+            context = QContext(record, Flags.UPDATERECORD, i_mode='COMMAND', v_mode='INTERPRETED')
+            ui.UI(context, self.q)
 
     def display_rec_list(self, Rec_fuzz_matches, action_description):
         if len(self.record_group) > 0:
@@ -82,7 +79,10 @@ class Memfog:
             for i,Rec in enumerate(Rec_fuzz_matches):
                 print('{}) [{}%] {}'.format(i, Rec.search_score, Rec.title))
 
-            selection = user.get_input()
+            try:
+                selection = user.get_input()
+            except KeyboardInterrupt:
+                return
 
             if selection is not None:
                 if selection < len(self.record_group):
@@ -142,15 +142,13 @@ class Memfog:
             print('Imported {}'.format(len(imported_records) - skipped_imports))
 
     def remove_rec(self, user_input):
-        while True:
-            Rec_fuzz_matches = self.fuzzy_match(user_input)
-            record = self.display_rec_list(Rec_fuzz_matches, 'Remove')
+        Rec_fuzz_matches = self.fuzzy_match(user_input)
+        record = self.display_rec_list(Rec_fuzz_matches, 'Remove')
 
-            if record is not None and user.prompt_yn('Delete {}'.format(record.title)):
-                context = QContext(record, flag=Flags.DELETERECORD)
-                self.q.put(context)
-                self.q.join()
-                del self.record_group[record.title]
-                Rec_fuzz_matches.remove(record)
-            else:
-                break
+        if record is not None and user.prompt_yn('Delete {}'.format(record.title)):
+            context = QContext(record, flag=Flags.DELETERECORD)
+            self.q.put(context)
+            self.q.join()
+            del self.record_group[record.title]
+            Rec_fuzz_matches.remove(record)
+

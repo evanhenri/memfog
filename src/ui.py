@@ -1,6 +1,5 @@
 import urwid.curses_display
 import urwid
-import signal
 import re
 
 from . import util
@@ -254,7 +253,6 @@ class DataController:
 
 class UI:
     def __init__(self, context, msg_queue):
-        signal.signal(signal.SIGINT, self.ctrl_c_callback)
         self.exit_flag = False
 
         self.context = context
@@ -287,7 +285,6 @@ class UI:
 
     def save(self, context):
         """ Update database entry for current record using most recent record data """
-        # context = self.update_context()
         self.msg_queue.put(context)
 
         if self.DataC.data.is_interpreted:
@@ -296,14 +293,6 @@ class UI:
         # Block until context put into queue is fully processed.
         # Race condition occurs when adding new records if not present
         self.msg_queue.join()
-
-        # FIXME bug where if save occurs when adding a new record, the record gets added on save and a duplicate 2nd record gets added on close
-        #   should change the flag to update so the first added record gets updated
-        # if context.flag == Flags.INSERTRECORD:
-        #     context.flag == Flags.UPDATERECORD
-
-    def ctrl_c_callback(self, sig, frame):
-        self.exit_flag = True
 
     def export(self, fp, payload):
         """ Creates json file at filepath fp containing data for currently displayed record """
@@ -395,7 +384,10 @@ class UI:
             keys = None
 
             while not keys:
-                keys = self.ScreenC.get_input()
+                try:
+                    keys = self.ScreenC.get_input()
+                except KeyboardInterrupt:
+                    return
 
             for k in keys:
                 if k == 'window resize':
@@ -416,14 +408,15 @@ class UI:
                 elif self.DataC.interaction_mode == 'COMMAND':
                     self.evaluate_keypress(k)
 
+        # Force switch to COMMAND mode so command line footer can prompt user if unsaved changes exist
+        self.set_interaction_mode('COMMAND')
         context = self.update_context()
 
         if len(context.altered_fields) > 0:
             self.WigetC.footer.base_widget.set_edit_text('Save change? y/n')
+
+            # refresh so message prompt is drawn to canvas
             self.refresh_screen(size)
             k = self.ScreenC.get_input()
             if k[0].lower() == 'y':
                 self.save(context)
-            else:
-                del context
-
