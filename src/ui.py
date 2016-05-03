@@ -243,12 +243,12 @@ class DataController:
         if self.view_mode == 'RAW':
             self.data.raw.update_text(view_data)
             if not self.data.is_interpreted:
-                self.data.interpreted = self.data.raw
+                vars(self.data.interpreted).update(vars(self.data.raw))
 
         elif self.view_mode == 'INTERPRETED':
             self.data.interpreted.update_text(view_data)
             if not self.data.is_interpreted:
-                self.data.raw = self.data.interpreted
+                vars(self.data.raw).update(vars(self.data.interpreted))
 
 
 class UI:
