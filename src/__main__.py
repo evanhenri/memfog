@@ -15,20 +15,21 @@ Options:
 """
 import pkg_resources
 from docopt import docopt
-from pathlib import Path
 import sys
+import os
 
 from . import memfog as mf
 from . import file_sys
+from .file_sys import Path
 from . import util
 
 
 class Config:
     def __init__(self, argv):
-        self.home_dp = Path.home()
-        self.project_dp = self.home_dp / 'memfog'
-        self.data_dp = self.project_dp / 'data'
-        self.db_fp = self.data_dp / 'records.db'
+        self.home_dp = os.path.expanduser('~')
+        self.project_dp = Path(self.home_dp, 'memfog')
+        self.data_dp = Path(self.project_dp, 'data')
+        self.db_fp = Path(self.data_dp, 'records.db')
 
         file_sys.init_dir(self.project_dp)
         file_sys.init_dir(self.data_dp)

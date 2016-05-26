@@ -1,12 +1,12 @@
 from fuzzywuzzy import fuzz
 import multiprocessing
 import datetime
-from pathlib import Path
 
 from . import file_io, ui, user, util
 from .record import Record, RecordGroup
 from .database import Database
 from .proxy import Flags
+from .file_sys import Path
 
 
 config = None
@@ -94,18 +94,18 @@ class Memfog:
 
     def export_recs(self, target_path):
         date = datetime.datetime.now()
-        default_fn = 'memfog_{}-{}-{}.json'.format(date.month, date.day, date.year)
+        default_fn = Path('memfog_{}-{}-{}.json'.format(date.month, date.day, date.year))
 
         if target_path is None:
-            target_path = config.project_dp / default_fn
+            target_path = config.project_dp + default_fn
         else:
-            target_path = Path(target_path).expanduser()
+            target_path = Path(target_path)
 
         if target_path.is_dir():
-            target_path = target_path / default_fn
+            target_path += default_fn
 
         if target_path.exists():
-            if not user.prompt_yn('Overwrite existing file {}'.format(target_path)):
+            if not user.prompt_yn('Overwrite existing file {}'.format(str(target_path))):
                 return
 
         rec_backups = [ Rec.dump() for Rec in self.record_group ]

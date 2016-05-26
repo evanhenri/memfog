@@ -1,21 +1,48 @@
-from pathlib import Path
+import os
 
+class Path:
+    def __init__(self, *path_pieces):
+        self._pieces = [str(p) for p in path_pieces]
 
-def get_path(*args):
-    result = []
+    def __str__(self):
+        return os.path.expanduser(os.path.join(*self._pieces))
 
-    for p in args:
-        if not isinstance(p, Path):
-            result.append(Path(p))
+    def __add__(self, other):
+        assert isinstance(other, Path)
+        return Path(str(self), other)
+
+    def append(self, piece):
+        if isinstance(piece, str):
+            self._pieces = os.path.join(self._pieces, piece)
+        elif isinstance(piece, Path):
+            self._pieces = os.path.join(self._pieces, str(piece))
         else:
-            result.append(p)
-    return result
+            self._pieces = os.path.join(self._pieces, *piece)
+
+    def exists(self):
+        return os.path.exists(str(self))
+
+    def is_dir(self):
+        return os.path.isdir(str(self))
+
+    def mkdir(self):
+        os.mkdir(str(self))
+
+    @property
+    def parent(self):
+        if len(self._pieces) > 1:
+            return Path(self._pieces[:-1:])
+        return Path('')
+
+    @property
+    def parts(self):
+        return self._pieces
 
 def init_dir(dp):
     """
     :type dp: pathlib.Path or str
     """
-    dp = get_path(dp)[0]
+    dp = Path(dp)
 
     try:
         if not dp.is_dir():
@@ -29,13 +56,14 @@ def fix_path(p, default_dp, default_fn):
     :param default_dp: default directory path
     :param default_fn: default file name
     """
-    p, default_dp, default_fn = get_path(p, default_dp, default_fn)
-    p = p.expanduser()
+    p = Path(p)
+    default_dp = Path(default_dp)
+    default_fn = Path(default_fn)
 
     if p.parent.is_dir() and not p.exists():
         return p
     elif p.is_dir():
-        return p / default_fn
+        return p + default_fn
     elif len(p.parts) == 1:
-        return default_dp / p
-    return default_dp / default_fn
+        return default_dp + p
+    return default_dp + default_fn
